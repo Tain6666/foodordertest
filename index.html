@@ -331,7 +331,7 @@
             callApi('getMenuData', {}).then(function(data){
                 menuData = data; Swal.close();
                 Swal.fire({
-                    title: 'โปรดเลือกรูปแบบ', icon: 'info', showDenyButton: true, showCloseButton: true, confirmButtonText: 'ราดข้าว (จาน)', denyButtonText: 'เป็นกับข้าว (ถุง)', confirmButtonColor: '#ff6b35', denyButtonColor: '#0984e3'
+                    title: 'โปรดเลือกรูปแบบ', icon: 'info', showDenyButton: true, showCloseButton: true, confirmButtonText: 'ราดข้าว (กล่อง)', denyButtonText: 'เป็นกับข้าว (ถุง)', confirmButtonColor: '#ff6b35', denyButtonColor: '#0984e3'
                 }).then(function(result) {
                     if (result.isConfirmed) selectRiceCurry('rice');
                     else if (result.isDenied) selectRiceCurry('dish');
@@ -561,7 +561,7 @@
             callApi('saveOrder', orderData).then(function(res){
                 if(res.status) {
                     localStorage.removeItem('bch_pending_order'); cart = []; updateCartBadge();
-                    Swal.fire({ icon: 'success', title: 'สั่งอาหารสำเร็จ!', html: 'Order ID: ' + res.orderId + '<br>ขอบคุณที่ใช้บริการครับ', confirmButtonColor: '#ff6b35', showCloseButton: true });
+                    Swal.fire({ icon: 'success', title: 'สั่งอาหารสำเร็จ!', html: 'Order ID: ' + res.orderId + '<br>ขอบคุณที่ใช้บริการ ขอพระเจ้าอวยพระพร', confirmButtonColor: '#ff6b35', showCloseButton: true });
                 } else { Swal.fire({title: 'Error', text: res.msg, icon: 'error'}); }
             }).catch(err => Swal.fire('Error', 'Connection Failed', 'error'));
         }
