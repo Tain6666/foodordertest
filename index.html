@@ -84,7 +84,16 @@
                     </div>
                 </div>
             </div>
-            <div class="text-center mt-5"><small class="text-muted">© 2026 BCH Food Ordering System</small><br><small class="text-muted">Thumrong Malaiwalee</small></div>
+            
+            <div class="row justify-content-center mt-4">
+                <div class="col-12 col-md-6 col-lg-4 text-center">
+                    <button class="btn btn-outline-secondary w-100 rounded-pill shadow-sm py-2" onclick="checkLatestOrder()">
+                        <i class="fas fa-history me-2"></i> เช็คสถานะออเดอร์ล่าสุด
+                    </button>
+                </div>
+            </div>
+            
+            <div class="text-center mt-4 mb-2"><small class="text-muted">© 2026 BCH Food Ordering System</small><br><small class="text-muted">Thumrong Malaiwalee</small></div>
         </div>
     </div>
 
@@ -174,10 +183,63 @@
             else { updateCartBadge(); }
         }
 
+        // +++++ ฟังก์ชันใหม่: เช็คออเดอร์ล่าสุด +++++
+        function checkLatestOrder() {
+            Swal.fire({title: 'กำลังตรวจสอบ...', text: 'กรุณารอสักครู่', allowOutsideClick: false, didOpen: function(){ Swal.showLoading(); }});
+            
+            callApi('getLatestOrder', { phone: currentUser.phone }).then(function(res) {
+                Swal.close();
+                if (res.status) {
+                    var o = res.data;
+                    // แปลง \n ในรายการและหมายเหตุ เป็น <br> เพื่อขึ้นบรรทัดใหม่
+                    var detailsFormatted = o.details.replace(/\n/g, '<br>');
+                    var noteFormatted = o.note ? o.note.replace(/\n/g, '<br>') : '-';
+                    
+                    var html = `
+                        <div class="text-start" style="font-size: 0.95rem;">
+                            <div class="d-flex justify-content-between border-bottom pb-2 mb-2">
+                                <span class="text-muted">Order ID:</span>
+                                <strong>${o.orderId}</strong>
+                            </div>
+                            <div class="d-flex justify-content-between border-bottom pb-2 mb-2">
+                                <span class="text-muted">วันที่:</span>
+                                <span>${o.date}</span>
+                            </div>
+                            <div class="border-bottom pb-2 mb-2">
+                                <div class="text-muted mb-1">รายการอาหาร:</div>
+                                <div class="ps-2" style="background:#f8f9fa; border-radius:5px; padding:5px;">${detailsFormatted}</div>
+                            </div>
+                            <div class="border-bottom pb-2 mb-2">
+                                <div class="text-muted mb-1">หมายเหตุ/การรับ:</div>
+                                <div class="text-danger ps-2">${noteFormatted}</div>
+                            </div>
+                            <div class="d-flex justify-content-between border-bottom pb-2 mb-2">
+                                <span class="text-muted">ยอดรวม:</span>
+                                <strong class="text-danger">${o.total} บาท</strong>
+                            </div>
+                            <div class="d-flex justify-content-between pt-1">
+                                <span class="text-muted">สถานะล่าสุด:</span>
+                                <span class="badge bg-primary fs-6">${o.orderStatus}</span>
+                            </div>
+                        </div>
+                    `;
+
+                    Swal.fire({
+                        title: '<i class="fas fa-receipt"></i> ออเดอร์ล่าสุดของคุณ',
+                        html: html,
+                        confirmButtonText: 'ปิดหน้าต่าง',
+                        confirmButtonColor: '#2d3436'
+                    });
+                } else {
+                    Swal.fire({title: 'ไม่พบข้อมูล', text: res.msg, icon: 'info'});
+                }
+            }).catch(err => Swal.fire('Error', 'Connection Failed', 'error'));
+        }
+
         // ------------------ อาหารตามสั่ง ------------------
         function openMenu1() {
             var now = new Date(); var hour = now.getHours();
-            if (hour < 6 || hour >= 18) { return Swal.fire({icon: 'warning', title: 'นอกเวลาให้บริการ', text: '06:00 - 18:00 น.'}); }
+            if (hour < 6 || hour >= 23) { return Swal.fire({icon: 'warning', title: 'นอกเวลาให้บริการ', text: '06:00 - 18:00 น.'}); }
             Swal.showLoading();
             callApi('getMenuData', {}).then(function(data){
                 menuData = data; Swal.close();
@@ -240,10 +302,9 @@
             var item = menuData.menu1[index];
             var meatHtml = item.meats.map(function(m){ return '<option value="'+m.name+'|'+m.price+'">'+m.name+' ('+(m.price>0 ? '+'+m.price : 'ปกติ')+')</option>'; }).join('');
             var toppingHtml = item.toppings.map(function(t){ return '<div class="form-check"><input class="form-check-input topping-check" type="checkbox" value="'+t.name+'|'+t.price+'" id="top-'+t.name+'"><label class="form-check-label" for="top-'+t.name+'">'+t.name+' (+'+t.price+')</label></div>'; }).join('');
-            
             var validTypes = item.types.filter(function(t) { return t.trim() !== ""; });
             var typeBlock = validTypes.length > 0 ? '<div class="mb-2"><label class="fw-bold">ประเภท</label><select id="sel-type" class="form-select">'+validTypes.map(function(t){ return '<option value="'+t+'">'+t+'</option>'; }).join('')+'</select></div>' : '<input type="hidden" id="sel-type" value="">';
-
+            
             var popupHtml = '<div class="text-start px-3"><div class="mb-2"><label class="fw-bold">เนื้อสัตว์</label><select id="sel-meat" class="form-select">'+meatHtml+'</select></div>' + typeBlock + '<div class="mb-2"><label class="fw-bold">Topping</label>'+toppingHtml+'</div><div class="mt-3 text-center"><label class="fw-bold d-block mb-1">จำนวน</label><div class="btn-group"><button class="btn btn-outline-secondary" onclick="stepQty(-1)">-</button><input type="number" id="sel-qty" class="form-control text-center" value="1" readonly style="width: 60px;"><button class="btn btn-outline-secondary" onclick="stepQty(1)">+</button></div></div></div>';
 
             Swal.fire({
@@ -265,7 +326,7 @@
         // ------------------ ข้าวราดแกง ------------------
         function openMenu2() {
             var now = new Date(); var hour = now.getHours();
-            if (hour < 6 || hour >= 14) { return Swal.fire({icon: 'warning', title: 'นอกเวลาให้บริการ', text: '06:00 - 14:00 น.'}); }
+            if (hour < 6 || hour >= 23) { return Swal.fire({icon: 'warning', title: 'นอกเวลาให้บริการ', text: '06:00 - 14:00 น.'}); }
             Swal.showLoading();
             callApi('getMenuData', {}).then(function(data){
                 menuData = data; Swal.close();
@@ -313,7 +374,7 @@
         // ------------------ เมนูพิเศษ ------------------
         function openMenuToday() {
             var now = new Date(); var hour = now.getHours();
-            if (hour < 6 || hour >= 12) { return Swal.fire({icon: 'warning', title: 'นอกเวลาให้บริการ', text: '06:00 - 12:00 น.'}); }
+            if (hour < 6 || hour >= 23) { return Swal.fire({icon: 'warning', title: 'นอกเวลาให้บริการ', text: '06:00 - 12:00 น.'}); }
 
             Swal.showLoading();
             callApi('getMenuToday', {}).then(function(data){
@@ -364,7 +425,6 @@
             }).then(function(result) { 
                 if(result.isConfirmed) { 
                     var note = result.value; 
-                    // ไปหน้าเลือกตัวเลือกการส่งและชำระเงิน
                     showCheckoutOptions(total, note); 
                 } 
             });
@@ -379,7 +439,6 @@
             } else { renderCartModal(); }
         }
 
-        // +++++ ฟังก์ชันใหม่: เลือกวิธีรับอาหารและวิธีชำระเงิน +++++
         function showCheckoutOptions(total, cartNote) {
             var html = `
                 <div class="text-start px-2">
@@ -430,7 +489,7 @@
                 preConfirm: function() {
                     var deliveryMethod = $('input[name="deliveryMethod"]:checked').val();
                     var paymentMethod = $('input[name="paymentMethod"]:checked').val();
-                    var finalNote = cartNote; // โน้ตเดิมจากตะกร้า
+                    var finalNote = cartNote; 
 
                     if (deliveryMethod === 'รับเอง') {
                         var time = $('#pickup-time').val().trim();
@@ -448,22 +507,17 @@
             }).then(function(result) {
                 if (result.isConfirmed) {
                     var finalData = result.value;
-                    
                     if (finalData.payment === 'โอนเงิน') {
-                        // ไปหน้า QR Code
                         showPaymentQr(total, finalData.note);
                     } else {
-                        // ถ้าเลือกสแกนจ่ายทีหลัง ให้ยิงออเดอร์เลย พร้อมส่งสถานะไปบอก Google Sheets
                         submitOrderToSheet(total, finalData.note, "สแกนจ่ายทีหลัง");
                     }
                 } else if (result.dismiss === Swal.DismissReason.cancel) {
-                    // กดย้อนกลับ ให้เปิดหน้าตะกร้ากลับมา
                     renderCartModal();
                 }
             });
         }
 
-        // ฟังก์ชันสลับการแสดงผลกล่องกรอกข้อมูลจัดส่ง/รับเอง
         function toggleDeliveryOptions() {
             var method = $('input[name="deliveryMethod"]:checked').val();
             if (method === 'รับเอง') {
@@ -476,16 +530,13 @@
         }
 
         function showPaymentQr(total, note) {
-            // บันทึกสถานะว่ากำลังจะจ่ายเงินด้วยวิธี "โอนเงิน"
             localStorage.setItem('bch_pending_order', JSON.stringify({ total: total, note: note, cart: cart, payment_method: 'โอนเงิน' }));
-            
             var amount = parseFloat(total).toFixed(2);
             var qrUrl = 'https://promptpay.io/' + PROMPTPAY_ID + '/' + amount;
             var html = '<div class="text-center"><div class="mb-2">ยอดชำระ: <strong class="text-danger fs-4">' + amount + '</strong> บาท</div><div class="border p-2 d-inline-block rounded bg-white shadow-sm mb-3"><img id="qr-image" src="https://tain6666.github.io/bch.github.io/pic/QRPAYBCH.jpg" width="250" height="300" alt="PromptPay QR" onerror="this.onerror=null;this.src=\'https://placehold.co/250x250?text=Error+Loading+QR\';"></div><div class="d-grid gap-2 col-8 mx-auto mb-3"><button type="button" class="btn btn-outline-primary rounded-pill btn-sm" id="btn-dl-qr"><i class="fas fa-download"></i> กดค้างที่ QR เพื่อบันทึกรูปหรือจับภาพหน้าจอ</button></div></div>';
             
             Swal.fire({ title: 'สแกนจ่ายเงิน', html: html, showCancelButton: true, confirmButtonText: 'โอนเงินแล้ว (ส่งออเดอร์)', confirmButtonColor: '#27ae60', cancelButtonText: 'ยกเลิก', allowOutsideClick: false, didOpen: function() { $('#btn-dl-qr').on('click', function() { downloadQrImage(qrUrl); }); } }).then(function(result) {
                 if (result.isConfirmed) { 
-                    // ถ้าโอนแล้ว ก็ส่งออเดอร์พร้อมสถานะ "รอชำระเงิน" (หรือจะเปลี่ยนเป็น "โอนแล้วรอตรวจสอบ" ก็ได้ครับ)
                     submitOrderToSheet(total, note, "รอตรวจสอบการโอน"); 
                 } else { 
                     localStorage.removeItem('bch_pending_order'); 
@@ -503,11 +554,8 @@
             });
         }
 
-        // เพิ่มรับค่า status เข้ามาด้วย
         function submitOrderToSheet(total, note, status) {
             Swal.fire({title: 'กำลังส่งออเดอร์...', text: 'กรุณารอสักครู่', allowOutsideClick: false, didOpen: function(){ Swal.showLoading(); } });
-            
-            // ส่ง status กลับไปให้ฝั่ง Backend
             var orderData = { user: currentUser, cart: cart, total: total, note: note, status: status };
             
             callApi('saveOrder', orderData).then(function(res){
