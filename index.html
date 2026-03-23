@@ -93,7 +93,7 @@
                 </div>
             </div>
             
-            <div class="text-center mt-4 mb-2"><small class="text-muted">© 2026 BCH Food Ordering System V.2</small><br><small class="text-muted">Thumrong Malaiwalee</small></div>
+            <div class="text-center mt-4 mb-2"><small class="text-muted">© 2026 BCH Food Ordering System</small><br><small class="text-muted">Thumrong Malaiwalee</small></div>
         </div>
     </div>
 
@@ -183,7 +183,6 @@
             else { updateCartBadge(); }
         }
 
-        // +++++ ฟังก์ชันใหม่: เช็คออเดอร์ล่าสุด +++++
         function checkLatestOrder() {
             Swal.fire({title: 'กำลังตรวจสอบ...', text: 'กรุณารอสักครู่', allowOutsideClick: false, didOpen: function(){ Swal.showLoading(); }});
             
@@ -191,7 +190,6 @@
                 Swal.close();
                 if (res.status) {
                     var o = res.data;
-                    // แปลง \n ในรายการและหมายเหตุ เป็น <br> เพื่อขึ้นบรรทัดใหม่
                     var detailsFormatted = o.details.replace(/\n/g, '<br>');
                     var noteFormatted = o.note ? o.note.replace(/\n/g, '<br>') : '-';
                     
@@ -239,7 +237,7 @@
         // ------------------ อาหารตามสั่ง ------------------
         function openMenu1() {
             var now = new Date(); var hour = now.getHours();
-            if (hour < 6 || hour >= 23) { return Swal.fire({icon: 'warning', title: 'นอกเวลาให้บริการ', text: '06:00 - 18:00 น.'}); }
+            if (hour < 6 || hour >= 16) { return Swal.fire({icon: 'warning', title: 'นอกเวลาให้บริการ', text: '06:00 - 16:00 น.'}); }
             Swal.showLoading();
             callApi('getMenuData', {}).then(function(data){
                 menuData = data; Swal.close();
@@ -273,7 +271,7 @@
                             <textarea id="custom-menu-desc" class="form-control mt-1" rows="3" placeholder="เช่น ข้าวผัดกะเพราปลาหมึก ไข่ดาว ไม่เผ็ด"></textarea>
                         </div>
                         <div class="alert alert-warning py-2 small mb-3">
-                            <i class="fas fa-info-circle"></i> ราคาอาหาร 0 บาทไว้ก่อน สามารถสแกนจ่ายตามราคาจริงภายหลังได้ หรือโทรสอบถามอาหารและราคาได้ที่เบอร์ภายใน 60120-1
+                            <i class="fas fa-info-circle"></i> ราคาอาหาร 0 บาทไว้ก่อน สามารถสแกนจ่ายตามราคาจริงภายหลังได้
                         </div>
                         <div class="mt-3 text-center">
                             <label class="fw-bold d-block mb-1">จำนวน</label>
@@ -325,13 +323,28 @@
 
         // ------------------ ข้าวราดแกง ------------------
         function openMenu2() {
-            var now = new Date(); var hour = now.getHours();
-            if (hour < 6 || hour >= 23) { return Swal.fire({icon: 'warning', title: 'นอกเวลาให้บริการ', text: '06:00 - 14:00 น.'}); }
+            var now = new Date(); var hour = now.getHours(); var dayOfWeek = now.getDay();
+            
+            // --- 1. เช็ควันเสาร์-อาทิตย์ ---
+            if (dayOfWeek === 0 || dayOfWeek === 6) {
+                return Swal.fire({icon: 'warning', title: 'ปิดบริการ', text: 'เปิดให้บริการวันจันทร์-ศุกร์ ครับ'});
+            }
+
+            // --- 2. เช็คเวลา ---
+            if (hour < 6 || hour >= 14) { return Swal.fire({icon: 'warning', title: 'นอกเวลาให้บริการ', text: '06:00 - 14:00 น.'}); }
+            
             Swal.showLoading();
             callApi('getMenuData', {}).then(function(data){
-                menuData = data; Swal.close();
+                menuData = data; 
+                Swal.close();
+
+                // --- 3. เช็คอาหารหมด ---
+                if (!menuData.menu2 || menuData.menu2.length === 0) {
+                    return Swal.fire({icon: 'info', title: 'ขออภัย', text: 'วันนี้อาหารหมดแล้วครับ'});
+                }
+
                 Swal.fire({
-                    title: 'โปรดเลือกรูปแบบ', icon: 'info', showDenyButton: true, showCloseButton: true, confirmButtonText: 'ราดข้าว (กล่อง)', denyButtonText: 'เป็นกับข้าว (ถุง)', confirmButtonColor: '#ff6b35', denyButtonColor: '#0984e3'
+                    title: 'โปรดเลือกรูปแบบ', icon: 'info', showDenyButton: true, showCloseButton: true, confirmButtonText: 'ราดข้าว (จาน)', denyButtonText: 'เป็นกับข้าว (ถุง)', confirmButtonColor: '#ff6b35', denyButtonColor: '#0984e3'
                 }).then(function(result) {
                     if (result.isConfirmed) selectRiceCurry('rice');
                     else if (result.isDenied) selectRiceCurry('dish');
@@ -349,7 +362,7 @@
             });
             html += '</div>';
             var title = mode === 'rice' ? 'เลือกกับข้าว (ราดข้าว)' : 'เลือกกับข้าว (ใส่ถุง)';
-            var footer = mode === 'rice' ? '<small class="text-danger">*เลือก 1-4 อย่าง (ราคาเริ่ม 45.-)</small>' : '';
+            var footer = mode === 'rice' ? '<small class="text-danger">*เลือก 1-4 อย่าง (ราคาเริ่ม 40.-)</small>' : '';
             html += '<div class="mt-3 text-center"><label class="fw-bold">จำนวน '+(mode === 'rice'?'จาน':'ถุง')+'</label><br><input type="number" id="m2-qty" class="form-control d-inline-block text-center mt-1" value="1" min="1" style="width:100px;"></div>';
 
             Swal.fire({
@@ -360,7 +373,7 @@
                         if(selected.length < 1 || selected.length > 4) { Swal.showValidationMessage('ต้องเลือกกับข้าว 1 ถึง 4 อย่าง'); return false; }
                         var descList = []; var extraPrice = 0;
                         selected.each(function(){ var idx = $(this).val(); descList.push(menuData.menu2[idx].name); extraPrice += parseInt(menuData.menu2[idx].priceRice); });
-                        var unitPrice = 40 + extraPrice; 
+                        var unitPrice = 35 + extraPrice; 
                         return { id: 'RICE-'+Date.now(), name: 'ข้าวราดแกง', desc: descList.join(', '), price: unitPrice, qty: qty, total: unitPrice * qty };
                     } else {
                         if(selected.length === 0) { Swal.showValidationMessage('กรุณาเลือกกับข้าว'); return false; }
@@ -373,13 +386,26 @@
 
         // ------------------ เมนูพิเศษ ------------------
         function openMenuToday() {
-            var now = new Date(); var hour = now.getHours();
-            if (hour < 6 || hour >= 23) { return Swal.fire({icon: 'warning', title: 'นอกเวลาให้บริการ', text: '06:00 - 12:00 น.'}); }
+            var now = new Date(); var hour = now.getHours(); var dayOfWeek = now.getDay();
+            
+            // --- 1. เช็ควันเสาร์-อาทิตย์ ---
+            if (dayOfWeek === 0 || dayOfWeek === 6) {
+                return Swal.fire({icon: 'warning', title: 'ปิดบริการ', text: 'เปิดให้บริการวันจันทร์-ศุกร์ ครับ'});
+            }
+
+            // --- 2. เช็คเวลา ---
+            if (hour < 6 || hour >= 14) { return Swal.fire({icon: 'warning', title: 'นอกเวลาให้บริการ', text: '06:00 - 14:00 น.'}); }
 
             Swal.showLoading();
             callApi('getMenuToday', {}).then(function(data){
                 menuTodayList = data.items;
                 Swal.close();
+                
+                // --- 3. เช็คอาหารหมด ---
+                if (!menuTodayList || menuTodayList.length === 0) {
+                    return Swal.fire({icon: 'info', title: 'ขออภัย', text: 'วันนี้อาหารหมดแล้วครับ'});
+                }
+
                 var html = '<div class="row g-3">';
                 menuTodayList.forEach(function(item, index) {
                     html += '<div class="col-6 col-md-4"><div class="card h-100 food-card" onclick="selectMenuToday('+index+')"><img src="'+item.img+'" class="card-img-top food-img" onerror="this.src=\'https://via.placeholder.com/150\'"><div class="card-body p-2 text-center"><h6 class="card-title fw-bold mb-0 text-dark">'+item.name+'</h6><span class="badge bg-danger rounded-pill mt-1">'+item.price+'.-</span></div></div></div>';
@@ -459,14 +485,12 @@
                         <input type="text" id="delivery-location" class="form-control form-control-sm mb-2" placeholder="ตึก/ชั้น/แผนก">
                         <select id="delivery-time" class="form-select form-select-sm">
                             <option value="">-- เลือกเวลาจัดส่ง --</option>
-                            <option value="07.00-10.00 น.">07.00 - 10.00 น.</option>
-                            <option value="11.00-13.00 น.">11.00 - 13.00 น.</option>
-                            <option value="15.00-18.00 น.">15.00 - 18.00 น.</option>
+                            <option value="07.30-08.00 น.">07.30 - 08.00 น.</option>
+                            <option value="11.30-12.00 น.">11.30 - 12.00 น.</option>
+                            <option value="16.30-17.00 น.">16.30 - 17.00 น.</option>
                         </select>
                     </div>
-                    
                     <hr>
-                    
                     <h6 class="fw-bold mb-2">2. วิธีการชำระเงิน</h6>
                     <div class="form-check mb-2">
                         <input class="form-check-input" type="radio" name="paymentMethod" id="pay-transfer" value="โอนเงิน" checked>
@@ -510,7 +534,7 @@
                     if (finalData.payment === 'โอนเงิน') {
                         showPaymentQr(total, finalData.note);
                     } else {
-                        submitOrderToSheet(total, finalData.note, "รอชำระ");
+                        submitOrderToSheet(total, finalData.note, "สแกนจ่ายทีหลัง");
                     }
                 } else if (result.dismiss === Swal.DismissReason.cancel) {
                     renderCartModal();
@@ -537,7 +561,7 @@
             
             Swal.fire({ title: 'สแกนจ่ายเงิน', html: html, showCancelButton: true, confirmButtonText: 'โอนเงินแล้ว (ส่งออเดอร์)', confirmButtonColor: '#27ae60', cancelButtonText: 'ยกเลิก', allowOutsideClick: false, didOpen: function() { $('#btn-dl-qr').on('click', function() { downloadQrImage(qrUrl); }); } }).then(function(result) {
                 if (result.isConfirmed) { 
-                    submitOrderToSheet(total, note, "โอนเงิน"); 
+                    submitOrderToSheet(total, note, "รอตรวจสอบการโอน"); 
                 } else { 
                     localStorage.removeItem('bch_pending_order'); 
                     renderCartModal(); 
@@ -561,7 +585,7 @@
             callApi('saveOrder', orderData).then(function(res){
                 if(res.status) {
                     localStorage.removeItem('bch_pending_order'); cart = []; updateCartBadge();
-                    Swal.fire({ icon: 'success', title: 'สั่งอาหารสำเร็จ!', html: 'Order ID: ' + res.orderId + '<br>ขอบคุณที่ใช้บริการ ขอพระเจ้าอวยพระพร', confirmButtonColor: '#ff6b35', showCloseButton: true });
+                    Swal.fire({ icon: 'success', title: 'สั่งอาหารสำเร็จ!', html: 'Order ID: ' + res.orderId + '<br>ขอบคุณที่ใช้บริการครับ', confirmButtonColor: '#ff6b35', showCloseButton: true });
                 } else { Swal.fire({title: 'Error', text: res.msg, icon: 'error'}); }
             }).catch(err => Swal.fire('Error', 'Connection Failed', 'error'));
         }
