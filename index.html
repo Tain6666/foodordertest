@@ -237,7 +237,7 @@
         // ------------------ อาหารตามสั่ง ------------------
         function openMenu1() {
             var now = new Date(); var hour = now.getHours();
-            if (hour < 6 || hour >= 16) { return Swal.fire({icon: 'warning', title: 'นอกเวลาให้บริการ', text: '06:00 - 16:00 น.'}); }
+            if (hour < 6 || hour >= 18) { return Swal.fire({icon: 'warning', title: 'นอกเวลาให้บริการ', text: '06:00 - 18:00 น.'}); }
             Swal.showLoading();
             callApi('getMenuData', {}).then(function(data){
                 menuData = data; Swal.close();
@@ -340,7 +340,7 @@
 
                 // --- 3. เช็คอาหารหมด ---
                 if (!menuData.menu2 || menuData.menu2.length === 0) {
-                    return Swal.fire({icon: 'info', title: 'ขออภัย', text: 'วันนี้อาหารหมดแล้วครับ'});
+                    return Swal.fire({icon: 'info', title: 'ขออภัย', text: 'วันนี้อาหารหมดแล้วค่ะ'});
                 }
 
                 Swal.fire({
@@ -373,7 +373,7 @@
                         if(selected.length < 1 || selected.length > 4) { Swal.showValidationMessage('ต้องเลือกกับข้าว 1 ถึง 4 อย่าง'); return false; }
                         var descList = []; var extraPrice = 0;
                         selected.each(function(){ var idx = $(this).val(); descList.push(menuData.menu2[idx].name); extraPrice += parseInt(menuData.menu2[idx].priceRice); });
-                        var unitPrice = 35 + extraPrice; 
+                        var unitPrice = 40 + extraPrice; 
                         return { id: 'RICE-'+Date.now(), name: 'ข้าวราดแกง', desc: descList.join(', '), price: unitPrice, qty: qty, total: unitPrice * qty };
                     } else {
                         if(selected.length === 0) { Swal.showValidationMessage('กรุณาเลือกกับข้าว'); return false; }
@@ -394,7 +394,7 @@
             }
 
             // --- 2. เช็คเวลา ---
-            if (hour < 6 || hour >= 14) { return Swal.fire({icon: 'warning', title: 'นอกเวลาให้บริการ', text: '06:00 - 14:00 น.'}); }
+            if (hour < 6 || hour >= 12) { return Swal.fire({icon: 'warning', title: 'นอกเวลาให้บริการ', text: '06:00 - 12:00 น.'}); }
 
             Swal.showLoading();
             callApi('getMenuToday', {}).then(function(data){
@@ -403,7 +403,7 @@
                 
                 // --- 3. เช็คอาหารหมด ---
                 if (!menuTodayList || menuTodayList.length === 0) {
-                    return Swal.fire({icon: 'info', title: 'ขออภัย', text: 'วันนี้อาหารหมดแล้วครับ'});
+                    return Swal.fire({icon: 'info', title: 'ขออภัย', text: 'วันนี้อาหารหมดแล้วค่ะ'});
                 }
 
                 var html = '<div class="row g-3">';
