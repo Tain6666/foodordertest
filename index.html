@@ -439,15 +439,47 @@
             });
         }
 
+        // +++++ ฟังก์ชัน: เลือกเมนูพิเศษ (แสดงโภชนาการ) +++++
         function selectMenuToday(index) {
             var item = menuTodayList[index];
-            var popupHtml = '<div class="text-center"><img src="'+item.img+'" style="height:150px; object-fit:cover; border-radius:10px; margin-bottom:10px;"><h5 class="fw-bold">'+item.name+'</h5><h4 class="text-danger my-2">'+item.price+' บาท</h4><div class="d-flex justify-content-center align-items-center mt-3 gap-2"><button class="btn btn-outline-secondary" onclick="stepQty(-1)">-</button><input type="number" id="sel-qty" class="form-control text-center" value="1" readonly style="width:60px;"><button class="btn btn-outline-secondary" onclick="stepQty(1)">+</button></div></div>';
+            
+            // แสดง Badge โภชนาการ (ถ้ามี)
+            var nutritionBadge = '';
+            if (item.kcal > 0 || item.protein > 0 || item.sodium > 0) {
+                nutritionBadge = '<div class="mb-3" style="font-size: 0.85rem;">' +
+                    '<span class="badge bg-warning text-dark me-1"><i class="fas fa-fire"></i> '+item.kcal+' kcal</span>' +
+                    '<span class="badge bg-info text-dark me-1"><i class="fas fa-drumstick-bite"></i> Pro '+item.protein+'g</span>' +
+                    '<span class="badge bg-secondary"><i class="fas fa-salt"></i> Na '+item.sodium+'mg</span>' +
+                '</div>';
+            }
+
+            var popupHtml = '<div class="text-center">' +
+                '<img src="'+item.img+'" style="height:150px; object-fit:cover; border-radius:10px; margin-bottom:10px;">' +
+                '<h5 class="fw-bold">'+item.name+'</h5>' +
+                '<h4 class="text-danger my-2">'+item.price+' บาท</h4>' +
+                nutritionBadge + // แทรกป้ายโภชนาการตรงนี้
+                '<div class="d-flex justify-content-center align-items-center mt-3 gap-2">' +
+                '<button class="btn btn-outline-secondary" onclick="stepQty(-1)">-</button>' +
+                '<input type="number" id="sel-qty" class="form-control text-center" value="1" readonly style="width:60px;">' +
+                '<button class="btn btn-outline-secondary" onclick="stepQty(1)">+</button>' +
+                '</div></div>';
 
             Swal.fire({
                 html: popupHtml, showCloseButton: true, confirmButtonText: 'ใส่ตะกร้า', confirmButtonColor: '#ff6b35',
                 preConfirm: function() {
                     var qty = parseInt($('#sel-qty').val());
-                    return { id: item.id, name: item.name, desc: 'เมนูพิเศษ', price: item.price, qty: qty, total: item.price * qty };
+                    // ส่งค่า kcal, protein, sodium ไปให้ฟังก์ชันตะกร้ารวมยอด
+                    return { 
+                        id: item.id, 
+                        name: item.name, 
+                        desc: 'เมนูพิเศษ', 
+                        price: item.price, 
+                        qty: qty, 
+                        total: item.price * qty,
+                        kcal: item.kcal,
+                        protein: item.protein,
+                        sodium: item.sodium
+                    };
                 }
             }).then(function(res){ if(res.isConfirmed) addToCart(res.value); });
         }
