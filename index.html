@@ -368,7 +368,7 @@
                 }
 
                 Swal.fire({
-                    title: 'โปรดเลือกรูปแบบ', icon: 'info', showDenyButton: true, showCloseButton: true, confirmButtonText: 'ราดข้าว (จาน)', denyButtonText: 'เป็นกับข้าว (ถุง)', confirmButtonColor: '#ff6b35', denyButtonColor: '#0984e3'
+                    title: 'โปรดเลือกรูปแบบ', icon: 'info', showDenyButton: true, showCloseButton: true, confirmButtonText: 'ราดข้าว (กล่อง)', denyButtonText: 'เป็นกับข้าว (ถุง)', confirmButtonColor: '#ff6b35', denyButtonColor: '#0984e3'
                 }).then(function(result) {
                     if (result.isConfirmed) selectRiceCurry('rice');
                     else if (result.isDenied) selectRiceCurry('dish');
@@ -386,9 +386,9 @@
             });
             html += '</div>';
             var title = mode === 'rice' ? 'เลือกกับข้าว (ราดข้าว)' : 'เลือกกับข้าว (ใส่ถุง)';
-            var footer = mode === 'rice' ? '<small class="text-danger">*เลือก 1-4 อย่าง (ราคาเริ่ม 40.-)</small>' : '';
+            var footer = mode === 'rice' ? '<small class="text-danger">*เลือก 1-4 อย่าง (ราคาเริ่ม 45.-)</small>' : '';
             if (mode === 'rice') { html += '<div class="form-check mt-3 text-start p-2 rounded" style="background-color: #ffeaa7;"><input class="form-check-input" type="checkbox" id="m2-takeaway"><label class="form-check-label fw-bold text-dark" for="m2-takeaway">ใส่กล่อง/กลับบ้าน (+5 บาท)</label></div>'; }
-            html += '<div class="mt-3 text-center"><label class="fw-bold">จำนวน '+(mode === 'rice'?'จาน':'ถุง')+'</label><br><input type="number" id="m2-qty" class="form-control d-inline-block text-center mt-1" value="1" min="1" style="width:100px;"></div>';
+            html += '<div class="mt-3 text-center"><label class="fw-bold">จำนวน '+(mode === 'rice'?'กล่อง':'ถุง')+'</label><br><input type="number" id="m2-qty" class="form-control d-inline-block text-center mt-1" value="1" min="1" style="width:100px;"></div>';
 
             Swal.fire({
                 title: title, html: html + footer, showCloseButton: true, confirmButtonText: 'บันทึก', confirmButtonColor: '#ff6b35',
@@ -417,12 +417,9 @@
                             totalNa += item.sodium || 0;
                         });
                         
-                        var unitPrice = 35 + extraPrice; 
-                        var descExtra = "";
-                        if($('#m2-takeaway').is(':checked')) { unitPrice += 5; descExtra = " (กลับบ้าน)"; }
-                        
+                        var unitPrice = 40 + extraPrice;                       
                         return { 
-                            id: 'RICE-'+Date.now(), name: 'ข้าวราดแกง' + descExtra, desc: descList.join(', '), 
+                            id: 'RICE-'+Date.now(), name: 'ข้าวราดแกง', desc: descList.join(', '), 
                             price: unitPrice, qty: qty, total: unitPrice * qty,
                             kcal: totalKcal, protein: totalPro, sodium: totalNa // ส่งเข้าตะกร้า
                         };
