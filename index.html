@@ -682,7 +682,7 @@
             
             Swal.fire({ title: 'สแกนจ่ายเงิน', html: html, showCancelButton: true, confirmButtonText: 'โอนเงินแล้ว (ส่งออเดอร์)', confirmButtonColor: '#27ae60', cancelButtonText: 'ยกเลิก', allowOutsideClick: false, didOpen: function() { $('#btn-dl-qr').on('click', function() { downloadQrImage(qrUrl); }); } }).then(function(result) {
                 if (result.isConfirmed) { 
-                    submitOrderToSheet(total, note, "รอตรวจสอบการโอน"); 
+                    submitOrderToSheet(total, note, "โอนเงิน"); 
                 } else { 
                     localStorage.removeItem('bch_pending_order'); 
                     renderCartModal(); 
@@ -706,7 +706,7 @@
             callApi('saveOrder', orderData).then(function(res){
                 if(res.status) {
                     localStorage.removeItem('bch_pending_order'); cart = []; updateCartBadge();
-                    Swal.fire({ icon: 'success', title: 'สั่งอาหารสำเร็จ!', html: 'Order ID: ' + res.orderId + '<br>ขอบคุณที่ใช้บริการครับ', confirmButtonColor: '#ff6b35', showCloseButton: true });
+                    Swal.fire({ icon: 'success', title: 'สั่งอาหารสำเร็จ!', html: 'Order ID: ' + res.orderId + '<br>ขอบคุณที่ใช้บริการ ขอพระเจ้าอวยพระพร', confirmButtonColor: '#ff6b35', showCloseButton: true });
                 } else { Swal.fire({title: 'Error', text: res.msg, icon: 'error'}); }
             }).catch(err => Swal.fire('Error', 'Connection Failed', 'error'));
         }
