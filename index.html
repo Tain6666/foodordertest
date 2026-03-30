@@ -428,10 +428,10 @@
                         var idx = selected.val(); 
                         var item = menuData.menu2[idx];
                         
-                        // ถุงปริมาณเยอะกว่าราดข้าว เลยคูณสารอาหาร 1.5 เท่า
-                        var dishKcal = Math.round((item.kcal || 0) * 1.5);
-                        var dishPro = Math.round((item.protein || 0) * 1.5);
-                        var dishNa = Math.round((item.sodium || 0) * 1.5);
+                        // ถุงปริมาณเยอะกว่าราดข้าว เลยคูณสารอาหาร 2 เท่า
+                        var dishKcal = Math.round((item.kcal || 0) * 2);
+                        var dishPro = Math.round((item.protein || 0) * 2);
+                        var dishNa = Math.round((item.sodium || 0) * 2);
 
                         return { 
                             id: item.id, name: item.name, desc: 'กับข้าว (ถุง)', 
@@ -606,9 +606,9 @@
                         <input type="text" id="delivery-location" class="form-control form-control-sm mb-2" placeholder="ตึก/ชั้น/แผนก">
                         <select id="delivery-time" class="form-select form-select-sm">
                             <option value="">-- เลือกเวลาจัดส่ง --</option>
-                            <option value="07.30-08.00 น.">07.30 - 08.00 น.</option>
-                            <option value="11.30-12.00 น.">11.30 - 12.00 น.</option>
-                            <option value="16.30-17.00 น.">16.30 - 17.00 น.</option>
+                            <option value="07.00-10.00 น.">07.00 - 10.00 น.</option>
+                            <option value="11.00-13.00 น.">11.00 - 13.00 น.</option>
+                            <option value="15.00-18.00 น.">15.00 - 18.00 น.</option>
                         </select>
                     </div>
                     <hr>
