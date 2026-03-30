@@ -387,7 +387,6 @@
             html += '</div>';
             var title = mode === 'rice' ? 'เลือกกับข้าว (ราดข้าว)' : 'เลือกกับข้าว (ใส่ถุง)';
             var footer = mode === 'rice' ? '<small class="text-danger">*เลือก 1-4 อย่าง (ราคาเริ่ม 45.-)</small>' : '';
-            if (mode === 'rice') { html += '<div class="form-check mt-3 text-start p-2 rounded" style="background-color: #ffeaa7;"><input class="form-check-input" type="checkbox" id="m2-takeaway"><label class="form-check-label fw-bold text-dark" for="m2-takeaway">ใส่กล่อง/กลับบ้าน (+5 บาท)</label></div>'; }
             html += '<div class="mt-3 text-center"><label class="fw-bold">จำนวน '+(mode === 'rice'?'กล่อง':'ถุง')+'</label><br><input type="number" id="m2-qty" class="form-control d-inline-block text-center mt-1" value="1" min="1" style="width:100px;"></div>';
 
             Swal.fire({
