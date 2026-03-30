@@ -387,22 +387,61 @@
             html += '</div>';
             var title = mode === 'rice' ? 'เลือกกับข้าว (ราดข้าว)' : 'เลือกกับข้าว (ใส่ถุง)';
             var footer = mode === 'rice' ? '<small class="text-danger">*เลือก 1-4 อย่าง (ราคาเริ่ม 40.-)</small>' : '';
+            if (mode === 'rice') { html += '<div class="form-check mt-3 text-start p-2 rounded" style="background-color: #ffeaa7;"><input class="form-check-input" type="checkbox" id="m2-takeaway"><label class="form-check-label fw-bold text-dark" for="m2-takeaway">ใส่กล่อง/กลับบ้าน (+5 บาท)</label></div>'; }
             html += '<div class="mt-3 text-center"><label class="fw-bold">จำนวน '+(mode === 'rice'?'จาน':'ถุง')+'</label><br><input type="number" id="m2-qty" class="form-control d-inline-block text-center mt-1" value="1" min="1" style="width:100px;"></div>';
 
             Swal.fire({
                 title: title, html: html + footer, showCloseButton: true, confirmButtonText: 'บันทึก', confirmButtonColor: '#ff6b35',
                 preConfirm: function() {
-                    var selected = $('.menu2-check:checked'); var qty = parseInt($('#m2-qty').val());
+                    var selected = $('.menu2-check:checked'); 
+                    var qty = parseInt($('#m2-qty').val());
+                    
                     if(mode === 'rice') {
                         if(selected.length < 1 || selected.length > 4) { Swal.showValidationMessage('ต้องเลือกกับข้าว 1 ถึง 4 อย่าง'); return false; }
-                        var descList = []; var extraPrice = 0;
-                        selected.each(function(){ var idx = $(this).val(); descList.push(menuData.menu2[idx].name); extraPrice += parseInt(menuData.menu2[idx].priceRice); });
-                        var unitPrice = 40 + extraPrice; 
-                        return { id: 'RICE-'+Date.now(), name: 'ข้าวราดแกง', desc: descList.join(', '), price: unitPrice, qty: qty, total: unitPrice * qty };
+                        var descList = []; 
+                        var extraPrice = 0;
+                        
+                        // ค่าสารอาหารตั้งต้นของ "ข้าวสวย 1 ทัพพี"
+                        var totalKcal = 200; 
+                        var totalPro = 4;
+                        var totalNa = 5;
+
+                        selected.each(function(){ 
+                            var idx = $(this).val(); 
+                            var item = menuData.menu2[idx];
+                            descList.push(item.name); 
+                            extraPrice += parseInt(item.priceRice); 
+                            // บวกสะสมสารอาหารของกับข้าวแต่ละอย่าง
+                            totalKcal += item.kcal || 0;
+                            totalPro += item.protein || 0;
+                            totalNa += item.sodium || 0;
+                        });
+                        
+                        var unitPrice = 35 + extraPrice; 
+                        var descExtra = "";
+                        if($('#m2-takeaway').is(':checked')) { unitPrice += 5; descExtra = " (กลับบ้าน)"; }
+                        
+                        return { 
+                            id: 'RICE-'+Date.now(), name: 'ข้าวราดแกง' + descExtra, desc: descList.join(', '), 
+                            price: unitPrice, qty: qty, total: unitPrice * qty,
+                            kcal: totalKcal, protein: totalPro, sodium: totalNa // ส่งเข้าตะกร้า
+                        };
                     } else {
+                        // กรณีเป็นกับข้าว (ตักใส่ถุง)
                         if(selected.length === 0) { Swal.showValidationMessage('กรุณาเลือกกับข้าว'); return false; }
-                        var idx = selected.val(); var item = menuData.menu2[idx];
-                        return { id: item.id, name: item.name, desc: 'กับข้าว (ถุง)', price: item.priceDish, qty: qty, total: item.priceDish * qty };
+                        var idx = selected.val(); 
+                        var item = menuData.menu2[idx];
+                        
+                        // ถุงปริมาณเยอะกว่าราดข้าว เลยคูณสารอาหาร 1.5 เท่า
+                        var dishKcal = Math.round((item.kcal || 0) * 1.5);
+                        var dishPro = Math.round((item.protein || 0) * 1.5);
+                        var dishNa = Math.round((item.sodium || 0) * 1.5);
+
+                        return { 
+                            id: item.id, name: item.name, desc: 'กับข้าว (ถุง)', 
+                            price: item.priceDish, qty: qty, total: item.priceDish * qty,
+                            kcal: dishKcal, protein: dishPro, sodium: dishNa // ส่งเข้าตะกร้า
+                        };
                     }
                 }
             }).then(function(res) { if(res.isConfirmed) addToCart(res.value); });
