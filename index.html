@@ -710,17 +710,50 @@
         },
         preConfirm: function() {
             var fileInput = document.getElementById('slip-upload');
+            // เช็คว่าแนบไฟล์หรือยัง
             if (fileInput.files.length === 0) {
                 Swal.showValidationMessage('⚠️ กรุณาแนบสลิปโอนเงินก่อนกดยืนยันออเดอร์');
                 return false;
             }
             var file = fileInput.files[0];
             
+            // แปลงไฟล์และย่อขนาดรูปด้วย Canvas
             return new Promise(function(resolve) {
                 var reader = new FileReader();
                 reader.onload = function(e) {
-                    var base64 = e.target.result.split(',')[1];
-                    resolve(base64);
+                    var img = new Image();
+                    img.onload = function() {
+                        var canvas = document.createElement('canvas');
+                        var MAX_WIDTH = 800;  // จำกัดความกว้างสูงสุดที่ 800px
+                        var MAX_HEIGHT = 800; // จำกัดความสูงสูงสุดที่ 800px
+                        var width = img.width;
+                        var height = img.height;
+
+                        // คำนวณสัดส่วนรูปภาพไม่ให้เสียทรง
+                        if (width > height) {
+                            if (width > MAX_WIDTH) {
+                                height *= MAX_WIDTH / width;
+                                width = MAX_WIDTH;
+                            }
+                        } else {
+                            if (height > MAX_HEIGHT) {
+                                width *= MAX_HEIGHT / height;
+                                height = MAX_HEIGHT;
+                            }
+                        }
+
+                        // วาดรูปใหม่ลงบน Canvas ด้วยขนาดที่เล็กลง
+                        canvas.width = width;
+                        canvas.height = height;
+                        var ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        // แปลงกลับเป็น Base64 แบบ JPEG (คุณภาพ 80% เพื่อให้ไฟล์เล็ก)
+                        var dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                        var base64 = dataUrl.split(',')[1]; 
+                        resolve(base64);
+                    };
+                    img.src = e.target.result;
                 };
                 reader.readAsDataURL(file);
             });
