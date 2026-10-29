@@ -1077,24 +1077,42 @@
             });
         }
 
-        function submitOrderToSheet(total, note, status, slipBase64) {
-            Swal.fire({
-                title: 'กำลังส่งออเดอร์อัตโนมัติ...', 
-                text: 'รอสักครู่ ระบบกำลังอัปโหลดสลิป (อาจใช้เวลา 5-15 วินาที)', 
-                allowOutsideClick: false, 
-                didOpen: function(){ Swal.showLoading(); } 
-            });
+        var isSubmittingOrder = false;
+
+        function submitOrderToSheet(total, note, status, slipBase64, retryCount) {
+            retryCount = retryCount || 0;
+            if (isSubmittingOrder && retryCount === 0) return;
+            isSubmittingOrder = true;
+
+            if (retryCount === 0) {
+                Swal.fire({
+                    title: 'กำลังส่งออเดอร์อัตโนมัติ...', 
+                    text: 'รอสักครู่ ระบบกำลังอัปโหลดสลิป (อาจใช้เวลา 5-15 วินาที)', 
+                    allowOutsideClick: false, 
+                    didOpen: function(){ Swal.showLoading(); } 
+                });
+            }
             
             var finalSlip = slipBase64 ? slipBase64 : null;
             var orderData = { user: currentUser, cart: cart, total: total, note: note, status: status, slipImage: finalSlip };
             
             callApi('saveOrder', orderData).then(function(res){
                 if(res.status) {
+                    isSubmittingOrder = false;
                     clearCartOnSuccess(res.orderId);
-                } else { 
+                } else {
+                    // หากเจอ Server Busy ให้ระบบลองส่งซ้ำอัตโนมัติสูงสุด 2 ครั้ง (ห่างกัน 2 วินาที)
+                    if (res.msg && res.msg.indexOf('Busy') !== -1 && retryCount < 2) {
+                        setTimeout(function() {
+                            submitOrderToSheet(total, note, status, slipBase64, retryCount + 1);
+                        }, 2000);
+                        return;
+                    }
+                    isSubmittingOrder = false;
                     Swal.fire({title: 'เกิดข้อผิดพลาด', text: res.msg, icon: 'error'}); 
                 }
             }).catch(function(err) {
+                isSubmittingOrder = false;
                 Swal.fire({
                     title: 'เน็ตสะดุด / ตรวจสอบข้อมูล...', 
                     text: 'การเชื่อมต่อขัดข้อง กำลังตรวจสอบว่าออเดอร์ถูกบันทึกหรือยัง...', 
@@ -1103,11 +1121,9 @@
                 });
 
                 callApi('getLatestOrder', { phone: currentUser.phone }).then(function(checkRes) {
-                    if (checkRes.status) {
-                        if (checkRes.data.total == total) {
-                            clearCartOnSuccess(checkRes.data.orderId);
-                            return;
-                        }
+                    if (checkRes.status && checkRes.data.total == total) {
+                        clearCartOnSuccess(checkRes.data.orderId);
+                        return;
                     }
                     Swal.fire({
                         title: 'ส่งข้อมูลไม่สำเร็จ', 
