@@ -24,6 +24,10 @@
         .nav-pills .nav-link.active { background-color: var(--primary-color); }
         .nav-pills .nav-link { color: var(--text-color); }
         .swal2-popup { font-family: 'Anuphan', sans-serif; border-radius: 20px; }
+        .bank-btn { font-size: 0.78rem; font-weight: 600; border-radius: 10px; padding: 6px 8px; display: flex; align-items: center; justify-content: center; gap: 5px; text-decoration: none; color: white !important; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: transform 0.15s; }
+        .bank-btn:active { transform: scale(0.96); }
+        .slip-dropzone { border: 2px dashed #ff6b35; border-radius: 12px; background: #fff9f5; padding: 12px; text-align: center; cursor: pointer; transition: all 0.2s; }
+        .slip-dropzone:hover { background: #fff0e6; }
     </style>
 </head>
 <body>
@@ -100,6 +104,8 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- ไลบรารี QRious สำหรับสร้าง QR Code แบบระบุยอดเงินลงบน Canvas โดยตรง -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
 
     <script>
         // **********************************************************
@@ -107,14 +113,14 @@
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzhVQBpmcX07zUWGr_FbPKS_xfoivA93ouDFTIDX23JeHUte1iGwGPVFBiUcjz-ByA8EQ/exec"; 
         // **********************************************************
 
-       var currentUser = null;
+        var currentUser = null;
         var menuData = { menu1: [], menu2: [] };
         var menuTodayList = []; 
         var cart = [];
-        var PROMPTPAY_ID = "0107537000017";
-        var currentCartNote = ""; // <--- เพิ่มตัวแปรนี้เพื่อจำข้อความหมายเหตุ
+        var PROMPTPAY_ID = "0107537000017"; // รหัสพร้อมเพย์ 13 หลัก หรือเบอร์โทรศัพท์ 10 หลัก
+        var USE_DYNAMIC_PROMPTPAY = true;   // true = สร้าง QR พร้อมใส่จำนวนเงินอัตโนมัติ
+        var currentCartNote = "";
 
-        // เพิ่มตัวแปรเก็บสถานะหน้า Checkout
         var currentCheckoutState = { 
             ecoOptions: [], 
             deliveryMethod: 'รับเอง', 
@@ -175,7 +181,6 @@
                 if (result.isConfirmed) {
                     localStorage.removeItem('bch_user'); localStorage.removeItem('bch_pending_order'); 
                     currentUser = null; cart = []; currentCartNote = ""; 
-                    // รีเซ็ตค่า Checkout กลับเป็นค่าเริ่มต้น
                     currentCheckoutState = { ecoOptions: [], deliveryMethod: 'รับเอง', pickupTime: '', deliveryLocation: '', deliveryTime: '', paymentMethod: 'โอนเงิน' };
                     
                     $('#auth-section').removeClass('hidden'); $('#app-section').addClass('hidden'); $('#nav-logout-btn').addClass('hidden'); $('#cart-btn').addClass('hidden');
@@ -188,24 +193,21 @@
             $('#auth-section').addClass('hidden'); $('#app-section').removeClass('hidden'); $('#nav-logout-btn').removeClass('hidden');
             $('#user-display-name').text(currentUser.name);
             
-            // --- 1. ดึงข้อมูลจาก Cache ในเครื่องลูกค้ามาก่อน (เพื่อให้กดปุ๊บติดปั๊บ) ---
             var cachedMenu = localStorage.getItem('bch_menu_data');
             if (cachedMenu) { menuData = JSON.parse(cachedMenu); }
 
             var cachedMenuToday = localStorage.getItem('bch_menu_today');
             if (cachedMenuToday) { menuTodayList = JSON.parse(cachedMenuToday); }
             
-            // --- 2. แอบไปโหลดข้อมูลล่าสุดจาก Sheets แบบเงียบๆ (Background Update) ---
             callApi('getMenuData', {}).then(function(data){
                 menuData = data;
-                localStorage.setItem('bch_menu_data', JSON.stringify(menuData)); // บันทึกทับของเดิม
+                localStorage.setItem('bch_menu_data', JSON.stringify(menuData));
             });
             callApi('getMenuToday', {}).then(function(data){
                 menuTodayList = data.items;
-                localStorage.setItem('bch_menu_today', JSON.stringify(menuTodayList)); // บันทึกทับของเดิม
+                localStorage.setItem('bch_menu_today', JSON.stringify(menuTodayList));
             });
 
-            // จัดการตะกร้าสินค้าค้าง (ถ้ามี)
             var pendingOrder = localStorage.getItem('bch_pending_order');
             if (pendingOrder) { 
                 var order = JSON.parse(pendingOrder); 
@@ -268,13 +270,12 @@
             }).catch(err => Swal.fire('Error', 'Connection Failed', 'error'));
         }
 
-       // ------------------ อาหารตามสั่ง ------------------
+        // ------------------ อาหารตามสั่ง ------------------
         function openMenu1() {
             var now = new Date(); 
             var hour = now.getHours();
             var minute = now.getMinutes();
             
-            // เช็คเวลา: ปิดก่อน 8:00 น. หรือ หลัง 17:45 น.
             if (hour < 8 || hour > 17 || (hour === 17 && minute > 45)) { 
                 return Swal.fire({
                     icon: 'warning', 
@@ -283,13 +284,11 @@
                 }); 
             }
             
-            // ถ้ามีข้อมูลเมนูใน Cache แล้ว ให้แสดงผลทันทีไม่ต้องรอโหลด
             if (menuData.menu1 && menuData.menu1.length > 0) {
                 renderMenu1();
                 return;
             }
 
-            // กรณีเข้ามาครั้งแรกสุดๆ ยังไม่มี Cache
             Swal.showLoading();
             callApi('getMenuData', {}).then(function(data){
                 menuData = data; 
@@ -299,7 +298,6 @@
             });
         }
         
-        // ฟังก์ชันช่วยวาดหน้าต่างเมนู 1
         function renderMenu1() {
             var html = '<div class="row g-3">';
             menuData.menu1.forEach(function(item, index) {
@@ -312,7 +310,6 @@
         function selectMenu1(index) {
             var item = menuData.menu1[index];
             
-            // นำค่า kcal, protein, sodium มาซ่อนไว้ใน value ของ option
             var meatHtml = item.meats.map(function(m){ return '<option value="'+m.name+'|'+m.price+'|'+m.kcal+'|'+m.protein+'|'+m.sodium+'">'+m.name+' ('+(m.price>0 ? '+'+m.price : 'ปกติ')+')</option>'; }).join('');
             var toppingHtml = item.toppings.map(function(t){ return '<div class="form-check"><input class="form-check-input topping-check" type="checkbox" value="'+t.name+'|'+t.price+'|'+t.kcal+'|'+t.protein+'|'+t.sodium+'" id="top-'+t.name+'"><label class="form-check-label" for="top-'+t.name+'">'+t.name+' (+'+t.price+')</label></div>'; }).join('');
             
@@ -412,7 +409,6 @@
                         var descList = []; 
                         var extraPrice = 0;
                         
-                        // ค่าสารอาหารตั้งต้นของ "ข้าวสวย 1 ทัพพี"
                         var totalKcal = 200; 
                         var totalPro = 4;
                         var totalNa = 5;
@@ -422,25 +418,22 @@
                             var item = menuData.menu2[idx];
                             descList.push(item.name); 
                             extraPrice += parseInt(item.priceRice); 
-                            // บวกสะสมสารอาหารของกับข้าวแต่ละอย่าง
                             totalKcal += item.kcal || 0;
                             totalPro += item.protein || 0;
                             totalNa += item.sodium || 0;
                         });
                         
-                        var unitPrice = 40 + extraPrice;                       
+                        var unitPrice = 40 + extraPrice;                        
                         return { 
                             id: 'RICE-'+Date.now(), name: 'ข้าวราดแกง', desc: descList.join(', '), 
                             price: unitPrice, qty: qty, total: unitPrice * qty,
-                            kcal: totalKcal, protein: totalPro, sodium: totalNa // ส่งเข้าตะกร้า
+                            kcal: totalKcal, protein: totalPro, sodium: totalNa
                         };
                     } else {
-                        // กรณีเป็นกับข้าว (ตักใส่ถุง)
                         if(selected.length === 0) { Swal.showValidationMessage('กรุณาเลือกกับข้าว'); return false; }
                         var idx = selected.val(); 
                         var item = menuData.menu2[idx];
                         
-                        // ถุงปริมาณเยอะกว่าราดข้าว เลยคูณสารอาหาร 2 เท่า
                         var dishKcal = Math.round((item.kcal || 0) * 2);
                         var dishPro = Math.round((item.protein || 0) * 2);
                         var dishNa = Math.round((item.sodium || 0) * 2);
@@ -448,7 +441,7 @@
                         return { 
                             id: item.id, name: item.name, desc: 'กับข้าว (ถุง)', 
                             price: item.priceDish, qty: qty, total: item.priceDish * qty,
-                            kcal: dishKcal, protein: dishPro, sodium: dishNa // ส่งเข้าตะกร้า
+                            kcal: dishKcal, protein: dishPro, sodium: dishNa
                         };
                     }
                 }
@@ -486,11 +479,9 @@
             Swal.fire({title: '⭐ เมนูพิเศษประจำวัน', html: html, width: 800, showCloseButton: true, showConfirmButton: false, customClass: { popup: 'swal-wide' }});
         }
 
-        // +++++ ฟังก์ชัน: เลือกเมนูพิเศษ (แสดงโภชนาการ) +++++
         function selectMenuToday(index) {
             var item = menuTodayList[index];
             
-            // แสดง Badge โภชนาการ (ถ้ามี)
             var nutritionBadge = '';
             if (item.kcal > 0 || item.protein > 0 || item.sodium > 0) {
                 nutritionBadge = '<div class="mb-3" style="font-size: 0.85rem;">' +
@@ -504,7 +495,7 @@
                 '<img src="'+item.img+'" style="height:150px; object-fit:cover; border-radius:10px; margin-bottom:10px;">' +
                 '<h5 class="fw-bold">'+item.name+'</h5>' +
                 '<h4 class="text-danger my-2">'+item.price+' บาท</h4>' +
-                nutritionBadge + // แทรกป้ายโภชนาการตรงนี้
+                nutritionBadge +
                 '<div class="d-flex justify-content-center align-items-center mt-3 gap-2">' +
                 '<button class="btn btn-outline-secondary" onclick="stepQty(-1)">-</button>' +
                 '<input type="number" id="sel-qty" class="form-control text-center" value="1" readonly style="width:60px;">' +
@@ -515,7 +506,6 @@
                 html: popupHtml, showCloseButton: true, confirmButtonText: 'ใส่ตะกร้า', confirmButtonColor: '#ff6b35',
                 preConfirm: function() {
                     var qty = parseInt($('#sel-qty').val());
-                    // ส่งค่า kcal, protein, sodium ไปให้ฟังก์ชันตะกร้ารวมยอด
                     return { 
                         id: item.id, 
                         name: item.name, 
@@ -538,7 +528,6 @@
         
         function showCart() { if(cart.length === 0) return; renderCartModal(); }
 
-        // --- ฟังก์ชันวาดตะกร้า ---
         function renderCartModal() {
             var total = 0, totalKcal = 0, totalPro = 0, totalNa = 0; 
             var html = '<ul class="list-group mb-3 text-start">';
@@ -573,14 +562,13 @@
                 `;
             }
 
-            // ใส่ currentCartNote กลับเข้าไปใน textarea เพื่อไม่ให้ข้อมูลหาย
             html += '<div class="text-start mb-2"><label class="form-label small fw-bold text-muted"><i class="fas fa-pen"></i> รายละเอียดเพิ่มเติม (ถ้ามี)</label><textarea id="cart-note" class="form-control" rows="2" placeholder="เช่น ไม่ใส่ผัก, ขอช้อนส้อม, เผ็ดน้อย">' + currentCartNote + '</textarea></div>';
             
             Swal.fire({ 
                 title: '🛒 ตะกร้าของฉัน', html: html, showCancelButton: true, showCloseButton: true, 
                 confirmButtonText: 'ดำเนินการต่อ', confirmButtonColor: '#27ae60', cancelButtonText: 'เลือกต่อ', width: 600, 
                 preConfirm: function() { 
-                    currentCartNote = $('#cart-note').val(); // อัปเดตตัวแปรเมื่อกดดำเนินการต่อ
+                    currentCartNote = $('#cart-note').val();
                     return currentCartNote; 
                 } 
             }).then(function(result) { 
@@ -588,7 +576,6 @@
                     var note = result.value; 
                     showCheckoutOptions(total, note); 
                 } else {
-                    // ถึงกดปิด หรือเลือกต่อ ก็บันทึกข้อความไว้
                     currentCartNote = $('#cart-note').val();
                 }
             });
@@ -604,7 +591,6 @@
         }
 
         function showCheckoutOptions(total, cartNote) {
-            // ดึงค่าที่เคยเลือกไว้มาประมวลผลให้ปุ่มต่างๆ แสดงผล (Checked)
             var ecoOpts = currentCheckoutState.ecoOptions || [];
             var chkCutlery = ecoOpts.includes("ไม่รับช้อนส้อม") ? "checked" : "";
             var chkCondiment = ecoOpts.includes("ไม่รับเครื่องปรุง") ? "checked" : "";
@@ -647,14 +633,17 @@
                         <input class="form-check-input" type="radio" name="deliveryMethod" id="del-delivery" value="จัดส่ง" ${methodDelivery} onchange="toggleDeliveryOptions()">
                         <label class="form-check-label" for="del-delivery">จัดส่ง (ระบุสถานที่)</label>
                     </div>
-                    <div id="delivery-options" class="mb-3 ps-4 ${hideDelivery}">
+                    <div id="delivery-options" class="mb-2 ps-4 ${hideDelivery}">
                         <input type="text" id="delivery-location" class="form-control form-control-sm mb-2" placeholder="ตึก/ชั้น/แผนก/ระบุเวลาจัดส่ง" value="${currentCheckoutState.deliveryLocation}">
-                        <select id="delivery-time" class="form-select form-select-sm">
+                        <select id="delivery-time" class="form-select form-select-sm mb-1">
                             <option value="">-- เลือกเวลาจัดส่ง --</option>
                             <option value="07.00-10.00 น." ${currentCheckoutState.deliveryTime === '07.00-10.00 น.' ? 'selected' : ''}>07.00 - 10.00 น.</option>
                             <option value="11.00-13.00 น." ${currentCheckoutState.deliveryTime === '11.00-13.00 น.' ? 'selected' : ''}>11.00 - 13.00 น.</option>
                             <option value="15.00-18.00 น." ${currentCheckoutState.deliveryTime === '15.00-18.00 น.' ? 'selected' : ''}>15.00 - 18.00 น.</option>
                         </select>
+                    </div>
+                    <div class="ps-4 mb-2">
+                        <small class="text-danger fw-bold" style="font-size: 0.8rem;">*เวลาที่ส่งอาจล่าช้าหากมี Order จำนวนมาก</small>
                     </div>
                     <hr>
                     <h6 class="fw-bold mb-2">2. วิธีการชำระเงิน</h6>
@@ -685,13 +674,12 @@
                     var deliveryLocation = $('#delivery-location').val().trim();
                     var deliveryTime = $('#delivery-time').val();
 
-                    // --- บันทึกค่าเก็บไว้ใช้ครั้งหน้าที่เปิดหน้านี้ ---
                     currentCheckoutState.ecoOptions = ecoOptions;
                     currentCheckoutState.deliveryMethod = deliveryMethod;
                     currentCheckoutState.pickupTime = pickupTime;
                     currentCheckoutState.deliveryLocation = deliveryLocation;
                     currentCheckoutState.deliveryTime = deliveryTime;
-                    currentCheckoutState.paymentMethod = 'โอนเงิน'; // ล็อคให้เป็นโอนเงิน
+                    currentCheckoutState.paymentMethod = 'โอนเงิน';
 
                     if (ecoOptions.length > 0) {
                         var prefix = finalNote ? "\n" : "";
@@ -711,13 +699,13 @@
             }).then(function(result) {
                 if (result.isConfirmed) {
                     var finalData = result.value;
-                    // พาไปหน้าสแกน QR Code ทันที เพราะมีช่องทางชำระเงินเดียวแล้ว
                     showPaymentQr(total, finalData.note);
                 } else if (result.dismiss === Swal.DismissReason.cancel) {
                     renderCartModal();
                 }
             });
         }
+
         function toggleDeliveryOptions() {
             var method = $('input[name="deliveryMethod"]:checked').val();
             if (method === 'รับเอง') {
@@ -729,7 +717,6 @@
             }
         }
 
-        // ฟังก์ชันล้างตะกร้า (แยกออกมาเพื่อให้เรียกใช้ง่ายขึ้น)
         function clearCartOnSuccess(orderId) {
             localStorage.removeItem('bch_pending_order');
             cart = [];
@@ -739,32 +726,248 @@
             Swal.fire({ 
                 icon: 'success', 
                 title: 'สั่งอาหารสำเร็จ!', 
-                html: 'Order ID: ' + orderId + '<br>ระบบได้รับออเดอร์เรียบร้อยแล้ว ขอพระเจ้าอวยพระพร', 
+                html: 'Order ID: <strong>' + orderId + '</strong><br>ระบบได้รับออเดอร์เรียบร้อยแล้ว ขอพระเจ้าอวยพระพร', 
                 confirmButtonColor: '#ff6b35', 
                 showCloseButton: true 
+            });
+        }
+
+        // ==========================================================
+        // ส่วนสร้าง Dynamic PromptPay QR Code (ระบุยอดเงินอัตโนมัติ)
+        // ==========================================================
+        function generatePromptPayPayload(promptpayId, amount) {
+            var target = String(promptpayId).replace(/[^0-9]/g, '');
+            var aid = "0016A000000677010111";
+            var targetTag = "";
+
+            if (target.length >= 15) {
+                targetTag = "03" + ("0" + target.length).slice(-2) + target;
+            } else if (target.length === 13) {
+                targetTag = "0213" + target;
+            } else {
+                if (target.charAt(0) === '0') {
+                    target = "0066" + target.substring(1);
+                }
+                targetTag = "0113" + target;
+            }
+
+            var merchantInfo = aid + targetTag;
+            var tag29 = "29" + ("0" + merchantInfo.length).slice(-2) + merchantInfo;
+            var numAmount = parseFloat(amount);
+            var poi = (numAmount && numAmount > 0) ? "010212" : "010211";
+
+            var payload = [
+                "000201",
+                poi,
+                tag29,
+                "5802TH",
+                "5303764"
+            ];
+
+            if (numAmount && numAmount > 0) {
+                var amtStr = numAmount.toFixed(2);
+                payload.push("54" + ("0" + amtStr.length).slice(-2) + amtStr);
+            }
+
+            var rawStr = payload.join("") + "6304";
+            var crc = 0xFFFF;
+            for (var i = 0; i < rawStr.length; i++) {
+                crc ^= (rawStr.charCodeAt(i) << 8);
+                for (var j = 0; j < 8; j++) {
+                    if ((crc & 0x8000) !== 0) {
+                        crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
+                    } else {
+                        crc = (crc << 1) & 0xFFFF;
+                    }
+                }
+            }
+            var crcHex = ("0000" + crc.toString(16).toUpperCase()).slice(-4);
+            return rawStr + crcHex;
+        }
+
+        // วาดการ์ด QR Code พร้อมยอดชำระลงบน Canvas เพื่อให้บันทึกลงมือถือได้ 100%
+        function renderPromptPayCanvas(canvasId, amount) {
+            var canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            var ctx = canvas.getContext('2d');
+            var w = canvas.width;
+            var h = canvas.height;
+
+            // พื้นหลังสีขาว
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, w, h);
+
+            // แถบหัวสีน้ำเงิน Thai QR Payment
+            ctx.fillStyle = "#113566";
+            ctx.fillRect(0, 0, w, 65);
+
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 20px 'Anuphan', sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("THAI QR PAYMENT", w / 2, 30);
+            ctx.font = "14px 'Anuphan', sans-serif";
+            ctx.fillText("BCH Food Ordering (พร้อมเพย์)", w / 2, 52);
+
+            // สร้าง QR Code ด้วย QRious
+            var payload = generatePromptPayPayload(PROMPTPAY_ID, amount);
+            var tempCanvas = document.createElement('canvas');
+            new QRious({
+                element: tempCanvas,
+                value: payload,
+                size: 240,
+                level: 'M'
+            });
+
+            // วาด QR ลงตรงกลาง
+            ctx.drawImage(tempCanvas, (w - 240) / 2, 80, 240, 240);
+
+            // กรอบรอบตัวการ์ด
+            ctx.strokeStyle = "#dee2e6";
+            ctx.lineWidth = 4;
+            ctx.strokeRect(2, 2, w - 4, h - 4);
+
+            // ข้อความยอดชำระด้านล่าง
+            ctx.fillStyle = "#2d3436";
+            ctx.font = "bold 16px 'Anuphan', sans-serif";
+            ctx.fillText("ยอดชำระสุทธิ (ระบุยอดเงินอัตโนมัติ)", w / 2, 345);
+
+            ctx.fillStyle = "#d63031";
+            ctx.font = "bold 28px 'Anuphan', sans-serif";
+            ctx.fillText(parseFloat(amount).toFixed(2) + " บาท", w / 2, 380);
+
+            ctx.fillStyle = "#636e72";
+            ctx.font = "12px 'Anuphan', sans-serif";
+            ctx.fillText("PromptPay ID: " + PROMPTPAY_ID, w / 2, 405);
+        }
+
+        // บันทึก QR ลงอัลบั้มรูปในมือถือ (รองรับทั้ง iOS และ Android)
+        async function saveQrToAlbum(amount) {
+            var canvas = document.getElementById('qr-payment-canvas');
+            if (!canvas) return;
+
+            var fileName = 'BCH-QR-' + parseFloat(amount).toFixed(0) + 'THB.png';
+
+            canvas.toBlob(async function(blob) {
+                if (!blob) return;
+                var file = new File([blob], fileName, { type: 'image/png' });
+
+                // กรณีมือถือรองรับ Web Share API (เช่น iPhone iOS Safari -> กด Save Image ลงอัลบั้มได้ทันที)
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try {
+                        await navigator.share({
+                            files: [file],
+                            title: 'QR ชำระค่าอาหาร BCH Food',
+                            text: 'ยอดชำระ ' + amount + ' บาท'
+                        });
+                        return;
+                    } catch (err) {
+                        // หากผู้ใช้กดยกเลิก Share Sheet ไม่ต้องแจ้ง Error
+                        if (err.name === 'AbortError') return;
+                    }
+                }
+
+                // Fallback สำหรับ Android / PC Browser (ดาวน์โหลดไฟล์ PNG เข้าเครื่องทันที)
+                var link = document.createElement('a');
+                link.download = fileName;
+                link.href = URL.createObjectURL(blob);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                Swal.showValidationMessage(''); // ล้างข้อความเตือนถ้ามี
+                var toastMixin = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500 });
+                toastMixin.fire({ icon: 'success', title: 'ดาวน์โหลดรูป QR เรียบร้อยแล้ว' });
+            }, 'image/png');
+        }
+
+        // เปิดแอปธนาคารผ่าน Deep Link
+        function openBankApp(schemeUrl, bankName) {
+            window.location.href = schemeUrl;
+        }
+
+        // ย่อรูปสลิปและแปลงเป็น Base64
+        function compressSlipFile(file) {
+            return new Promise(function(resolve) {
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var img = new Image();
+                    img.onload = function() {
+                        var canvas = document.createElement('canvas');
+                        var MAX_WIDTH = 600;  
+                        var MAX_HEIGHT = 600; 
+                        var width = img.width;
+                        var height = img.height;
+
+                        if (width > height) {
+                            if (width > MAX_WIDTH) {
+                                height *= MAX_WIDTH / width;
+                                width = MAX_WIDTH;
+                            }
+                        } else {
+                            if (height > MAX_HEIGHT) {
+                                width *= MAX_HEIGHT / height;
+                                height = MAX_HEIGHT;
+                            }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        var ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        var dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                        var base64 = dataUrl.split(',')[1]; 
+                        resolve(base64);
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
             });
         }
 
         function showPaymentQr(total, note) {
             localStorage.setItem('bch_pending_order', JSON.stringify({ total: total, note: note, cart: cart, payment_method: 'โอนเงิน' }));
             var amount = parseFloat(total).toFixed(2);
-            var qrUrl = 'https://promptpay.io/' + PROMPTPAY_ID + '/' + amount;
             
+            var qrDisplayHtml = USE_DYNAMIC_PROMPTPAY 
+                ? `<canvas id="qr-payment-canvas" width="340" height="420" style="width: 240px; height: auto; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);"></canvas>`
+                : `<img id="qr-image" src="https://lh3.googleusercontent.com/d/1OSPnc96ejBHV7Z6CFSNWc8t86INNwKDh" width="240" height="290" alt="PromptPay QR" class="rounded shadow-sm">`;
+
             var html = `
                 <div class="text-center">
-                    <div class="mb-2">ยอดชำระ: <strong class="text-danger fs-4">${amount}</strong> บาท</div>
-                    <div class="border p-2 d-inline-block rounded bg-white shadow-sm mb-3">
-                        <img id="qr-image" src="https://lh3.googleusercontent.com/d/1OSPnc96ejBHV7Z6CFSNWc8t86INNwKDh" width="250" height="300" alt="PromptPay QR" onerror="this.onerror=null;this.src='https://placehold.co/250x250?text=Error+Loading+QR';">
-                    </div>
-                    <div class="d-grid gap-2 col-8 mx-auto mb-3">
-                        <button type="button" class="btn btn-outline-primary rounded-pill btn-sm" id="btn-dl-qr">
-                            <i class="fas fa-download"></i> กดค้างที่ QR เพื่อบันทึกรูป
+                    <div class="mb-2">${qrDisplayHtml}</div>
+                    
+                    <!-- ปุ่มบันทึก QR ลงอัลบั้มรูป (iOS & Android) -->
+                    <div class="d-grid gap-2 col-10 mx-auto mb-2">
+                        <button type="button" class="btn btn-primary rounded-pill btn-sm py-2 shadow-sm" id="btn-save-qr">
+                            <i class="fas fa-download me-1"></i> บันทึก QR ลงอัลบั้มรูป (iOS / Android)
                         </button>
                     </div>
-                    <hr>
+                    <small class="text-muted d-block mb-2" style="font-size: 0.72rem;">
+                        *สำหรับ iPhone: กดปุ่มด้านบนแล้วเลือก <strong>"บันทึกรูปภาพ (Save Image)"</strong>
+                    </small>
+
+                    <!-- ปุ่มกดเปิดแอปธนาคารทันที -->
+                    <div class="bg-light p-2 rounded-3 mb-3 border">
+                        <div class="small fw-bold text-secondary mb-2"><i class="fas fa-mobile-alt me-1"></i> กดเพื่อเปิดแอปธนาคารของคุณ</div>
+                        <div class="row g-1">
+                            <div class="col-4"><a href="javascript:void(0)" onclick="openBankApp('kplus://', 'K PLUS')" class="bank-btn" style="background:#138f2d;">K PLUS</a></div>
+                            <div class="col-4"><a href="javascript:void(0)" onclick="openBankApp('scbeasy://', 'SCB EASY')" class="bank-btn" style="background:#4e2e7f;">SCB EASY</a></div>
+                            <div class="col-4"><a href="javascript:void(0)" onclick="openBankApp('ktbnext://', 'Krungthai')" class="bank-btn" style="background:#00a9e0;">กรุงไทย</a></div>
+                            <div class="col-4"><a href="javascript:void(0)" onclick="openBankApp('bualuangmbanking://', 'BBL')" class="bank-btn" style="background:#1e4598;">กรุงเทพ</a></div>
+                            <div class="col-4"><a href="javascript:void(0)" onclick="openBankApp('kma://', 'KMA')" class="bank-btn" style="background:#fdb813; color:#2d3436 !important;">กรุงศรี</a></div>
+                            <div class="col-4"><a href="javascript:void(0)" onclick="openBankApp('ttbtouch://', 'ttb')" class="bank-btn" style="background:#0050f0;">ttb touch</a></div>
+                        </div>
+                    </div>
+
+                    <!-- ส่วนแนบสลิปและส่งออเดอร์อัตโนมัติ -->
                     <div class="text-start mt-2">
-                        <label class="form-label fw-bold text-danger small"><i class="fas fa-camera"></i> แนบสลิปโอนเงิน (บังคับ)</label>
-                        <input class="form-control form-control-sm" type="file" id="slip-upload" accept="image/jpeg, image/png">
+                        <label class=" slip-dropzone w-100" for="slip-upload">
+                            <i class="fas fa-cloud-upload-alt fa-2x text-danger mb-1"></i>
+                            <div class="fw-bold text-danger small">แตะที่นี่เพื่อแนบสลิปโอนเงิน</div>
+                            <div class="text-muted" style="font-size: 0.72rem;">(เมื่อเลือกสลิปแล้ว ระบบจะส่งออเดอร์ให้อัตโนมัติทันที)</div>
+                            <input class="form-control form-control-sm mt-2" type="file" id="slip-upload" accept="image/jpeg, image/png">
+                        </label>
                     </div>
                 </div>`;
             
@@ -774,10 +977,22 @@
                 showCancelButton: true,
                 confirmButtonText: 'โอนเงินแล้ว (ส่งออเดอร์)',
                 confirmButtonColor: '#27ae60',
-                cancelButtonText: 'ยกเลิก',
+                cancelButtonText: 'ย้อนกลับ',
                 allowOutsideClick: false,
                 didOpen: function() { 
-                    $('#btn-dl-qr').on('click', function() { downloadQrImage(qrUrl); }); 
+                    if (USE_DYNAMIC_PROMPTPAY) {
+                        renderPromptPayCanvas('qr-payment-canvas', amount);
+                    }
+                    $('#btn-save-qr').on('click', function() { 
+                        saveQrToAlbum(amount); 
+                    });
+
+                    // ทันทีที่ลูกค้าเลือกรูปสลิป ให้ประมวลผลและส่งออเดอร์อัตโนมัติทันที!
+                    $('#slip-upload').on('change', function() {
+                        if (this.files && this.files.length > 0) {
+                            Swal.clickConfirm();
+                        }
+                    });
                 },
                 preConfirm: function() {
                     var fileInput = document.getElementById('slip-upload');
@@ -786,45 +1001,7 @@
                         return false;
                     }
                     var file = fileInput.files[0];
-                    
-                    return new Promise(function(resolve) {
-                        var reader = new FileReader();
-                        reader.onload = function(e) {
-                            var img = new Image();
-                            img.onload = function() {
-                                var canvas = document.createElement('canvas');
-                                // แก้ไข 1: ลดขนาดสูงสุดเหลือ 600 เพื่อให้อัปโหลดไวขึ้น ลดโอกาส Timeout
-                                var MAX_WIDTH = 600;  
-                                var MAX_HEIGHT = 600; 
-                                var width = img.width;
-                                var height = img.height;
-
-                                if (width > height) {
-                                    if (width > MAX_WIDTH) {
-                                        height *= MAX_WIDTH / width;
-                                        width = MAX_WIDTH;
-                                    }
-                                } else {
-                                    if (height > MAX_HEIGHT) {
-                                        width *= MAX_HEIGHT / height;
-                                        height = MAX_HEIGHT;
-                                    }
-                                }
-
-                                canvas.width = width;
-                                canvas.height = height;
-                                var ctx = canvas.getContext('2d');
-                                ctx.drawImage(img, 0, 0, width, height);
-                                
-                                // แก้ไข 2: ปรับลดคุณภาพเหลือ 0.6 (60%) ไฟล์จะเล็กลงมากแต่ยังอ่านตัวหนังสือออก
-                                var dataUrl = canvas.toDataURL('image/jpeg', 0.6);
-                                var base64 = dataUrl.split(',')[1]; 
-                                resolve(base64);
-                            };
-                            img.src = e.target.result;
-                        };
-                        reader.readAsDataURL(file);
-                    });
+                    return compressSlipFile(file);
                 }
             }).then(function(result) {
                 if (result.isConfirmed) {
@@ -838,9 +1015,8 @@
         }
 
         function submitOrderToSheet(total, note, status, slipBase64) {
-            // ปรับข้อความให้ลูกค้ารู้ว่าอาจใช้เวลาอัปโหลดรูป
             Swal.fire({
-                title: 'กำลังส่งออเดอร์...', 
+                title: 'กำลังส่งออเดอร์อัตโนมัติ...', 
                 text: 'รอสักครู่ ระบบกำลังอัปโหลดสลิป (อาจใช้เวลา 5-15 วินาที)', 
                 allowOutsideClick: false, 
                 didOpen: function(){ Swal.showLoading(); } 
@@ -851,14 +1027,11 @@
             
             callApi('saveOrder', orderData).then(function(res){
                 if(res.status) {
-                    // สำเร็จปกติ -> ล้างตะกร้า
                     clearCartOnSuccess(res.orderId);
                 } else { 
                     Swal.fire({title: 'เกิดข้อผิดพลาด', text: res.msg, icon: 'error'}); 
                 }
             }).catch(function(err) {
-                // แก้ไข 3: เกิด Network Timeout! มือถือเน็ตช้าจนหลุด 
-                // เราจะสั่งให้ระบบแอบไปเช็ค Sheet ว่าจริงๆ แล้วออเดอร์เซฟผ่านไปแล้วหรือยัง
                 Swal.fire({
                     title: 'เน็ตสะดุด / ตรวจสอบข้อมูล...', 
                     text: 'การเชื่อมต่อขัดข้อง กำลังตรวจสอบว่าออเดอร์ถูกบันทึกหรือยัง...', 
@@ -866,16 +1039,13 @@
                     didOpen: function(){ Swal.showLoading(); }
                 });
 
-                // เรียก API ดึงออเดอร์ล่าสุดของเบอร์โทรนี้มาเช็ค
                 callApi('getLatestOrder', { phone: currentUser.phone }).then(function(checkRes) {
                     if (checkRes.status) {
-                        // ถ้าดึงมาแล้วพบว่า "ยอดรวมเท่ากัน" ถือว่าออเดอร์เมื่อกี้เซฟเข้า Sheet ไปเรียบร้อยแล้ว
                         if (checkRes.data.total == total) {
                             clearCartOnSuccess(checkRes.data.orderId);
                             return;
                         }
                     }
-                    // ถ้าไม่เจอออเดอร์ หรือยอดไม่ตรง แสดงว่าอัปโหลดไม่ผ่านจริงๆ ให้แจ้ง Error
                     Swal.fire({
                         title: 'ส่งข้อมูลไม่สำเร็จ', 
                         text: 'กรุณากดส่งออเดอร์ใหม่อีกครั้งครับ (หากส่งสำเร็จไปแล้ว ระบบจะไม่ทำการบันทึกซ้ำ)', 
@@ -883,7 +1053,6 @@
                         confirmButtonColor: '#ff6b35'
                     });
                 }).catch(function(err2) {
-                    // เช็คไม่ได้อีกรอบ แสดงว่าเน็ตหลุดจริงๆ ให้ลูกค้าตรวจเน็ตเอง
                     Swal.fire({
                         title: 'ไม่สามารถติดต่อเซิร์ฟเวอร์', 
                         text: 'กรุณาตรวจสอบอินเทอร์เน็ต และลองเช็คสถานะออเดอร์ล่าสุดที่หน้าแรกก่อนกดส่งซ้ำครับ', 
@@ -891,15 +1060,6 @@
                         confirmButtonColor: '#ff6b35'
                     });
                 });
-            });
-        }
-        
-        function downloadQrImage(url) {
-            Swal.fire({
-                title: 'บันทึกรูปภาพ',
-                html: '<div class="mb-2">กดค้างที่รูปภาพด้านล่างแล้วเลือก "บันทึกรูปภาพ"</div><img src="'+url+'" style="width:100%; border:1px solid #ccc;">',
-                showCloseButton: true,
-                confirmButtonText: 'ปิด'
             });
         }
     </script>
