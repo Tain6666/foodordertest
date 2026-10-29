@@ -24,10 +24,13 @@
         .nav-pills .nav-link.active { background-color: var(--primary-color); }
         .nav-pills .nav-link { color: var(--text-color); }
         .swal2-popup { font-family: 'Anuphan', sans-serif; border-radius: 20px; }
-        .bank-btn { font-size: 0.78rem; font-weight: 600; border-radius: 10px; padding: 6px 8px; display: flex; align-items: center; justify-content: center; gap: 5px; text-decoration: none; color: white !important; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: transform 0.15s; }
+        .bank-btn { font-size: 0.85rem; font-weight: 600; border-radius: 12px; padding: 10px 8px; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; color: white !important; box-shadow: 0 3px 6px rgba(0,0,0,0.12); transition: transform 0.15s; border: none; width: 100%; }
         .bank-btn:active { transform: scale(0.96); }
         .slip-dropzone { border: 2px dashed #ff6b35; border-radius: 12px; background: #fff9f5; padding: 12px; text-align: center; cursor: pointer; transition: all 0.2s; }
         .slip-dropzone:hover { background: #fff0e6; }
+        .bank-modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.65); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; animation: fadeIn 0.2s ease; }
+        .bank-modal-card { background: white; border-radius: 20px; max-width: 380px; width: 100%; padding: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); text-align: center; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -41,6 +44,28 @@
         </div>
     </nav>
     <div id="cart-btn" class="cart-fab hidden" onclick="showCart()"><i class="fas fa-shopping-basket fa-lg"></i> <span id="cart-count">0</span> <small class="ms-1">รายการ</small></div>
+    
+    <!-- หน้าต่างเด้งเลือกแอปธนาคารหลังบันทึกรูปเสร็จ -->
+    <div id="bank-chooser-modal" class="bank-modal-backdrop hidden">
+        <div class="bank-modal-card">
+            <div class="text-success mb-1"><i class="fas fa-check-circle fa-2x"></i></div>
+            <h5 class="fw-bold mb-1">บันทึกรูป QR สำเร็จ!</h5>
+            <p class="text-muted small mb-3">กดเลือกแอปธนาคารในเครื่องเพื่อสแกนจ่ายได้เลยครับ</p>
+            <div class="row g-2 mb-3">
+                <div class="col-6"><button type="button" onclick="openBankApp('kbank')" class="bank-btn" style="background:#138f2d;">K PLUS (กสิกร)</button></div>
+                <div class="col-6"><button type="button" onclick="openBankApp('scb')" class="bank-btn" style="background:#4e2e7f;">SCB EASY (ไทยพาณิชย์)</button></div>
+                <div class="col-6"><button type="button" onclick="openBankApp('ktb')" class="bank-btn" style="background:#00a9e0;">Krungthai NEXT</button></div>
+                <div class="col-6"><button type="button" onclick="openBankApp('bbl')" class="bank-btn" style="background:#1e4598;">Bangkok Bank</button></div>
+                <div class="col-6"><button type="button" onclick="openBankApp('kma')" class="bank-btn" style="background:#fdb813; color:#2d3436 !important;">KMA (กรุงศรี)</button></div>
+                <div class="col-6"><button type="button" onclick="openBankApp('ttb')" class="bank-btn" style="background:#0050f0;">ttb touch</button></div>
+                <div class="col-12"><button type="button" onclick="openBankApp('gsb')" class="bank-btn" style="background:#eb198d;">MyMo (ออมสิน)</button></div>
+            </div>
+            <button type="button" class="btn btn-outline-secondary rounded-pill w-100 btn-sm" onclick="closeBankChooser()">
+                กลับไปหน้าแนบสลิปโอนเงิน
+            </button>
+        </div>
+    </div>
+
     <div class="container mt-4">
         <div id="auth-section">
             <div class="row justify-content-center">
@@ -104,8 +129,9 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <!-- ไลบรารี QRious สำหรับสร้าง QR Code แบบระบุยอดเงินลงบน Canvas โดยตรง -->
+    <!-- ไลบรารี QRious (วาด QR) และ jsQR (ถอดรหัสจากรูป QR จริงของโรงพยาบาล) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 
     <script>
         // **********************************************************
@@ -117,9 +143,12 @@
         var menuData = { menu1: [], menu2: [] };
         var menuTodayList = []; 
         var cart = [];
-        var PROMPTPAY_ID = "0107537000017"; // รหัสพร้อมเพย์ 13 หลัก หรือเบอร์โทรศัพท์ 10 หลัก
-        var USE_DYNAMIC_PROMPTPAY = true;   // true = สร้าง QR พร้อมใส่จำนวนเงินอัตโนมัติ
         var currentCartNote = "";
+
+        // รูป QR จริงของโรงพยาบาล และตัวแปรเก็บข้อมูลรหัส QR ที่ถอดรหัสได้
+        var HOSPITAL_QR_URL = "https://lh3.googleusercontent.com/d/1OSPnc96ejBHV7Z6CFSNWc8t86INNwKDh";
+        var hospitalQrBase64 = localStorage.getItem('bch_qr_b64') || null;
+        var hospitalRawQrPayload = localStorage.getItem('bch_raw_qr_payload') || ""; 
 
         var currentCheckoutState = { 
             ecoOptions: [], 
@@ -133,12 +162,50 @@
         $(document).ready(function(){
             var storedUser = localStorage.getItem('bch_user');
             if(storedUser) { currentUser = JSON.parse(storedUser); showApp(); }
+            preloadHospitalQr();
         });
 
         function callApi(action, data) {
             return fetch(SCRIPT_URL + "?action=" + action, {
                 method: 'POST', body: JSON.stringify(data)
             }).then(function(response) { return response.json(); });
+        }
+
+        // โหลดรูป QR จริงของโรงพยาบาลและถอดรหัสบัญชีจริงเก็บไว้เพื่อใช้สร้างยอดเงินอัตโนมัติ
+        function preloadHospitalQr() {
+            if (hospitalQrBase64 && hospitalRawQrPayload) return;
+            callApi('getQrBase64', {}).then(function(res) {
+                if (res && res.status && res.base64) {
+                    hospitalQrBase64 = res.base64;
+                    try { localStorage.setItem('bch_qr_b64', hospitalQrBase64); } catch(e) {}
+                    decodeQrFromBase64(hospitalQrBase64);
+                }
+            }).catch(function(){});
+        }
+
+        function decodeQrFromBase64(b64) {
+            var img = new Image();
+            img.onload = function() {
+                var scales = [1, 0.75, 0.5];
+                for (var s = 0; s < scales.length; s++) {
+                    var w = Math.floor(img.width * scales[s]);
+                    var h = Math.floor(img.height * scales[s]);
+                    var c = document.createElement('canvas');
+                    c.width = w; c.height = h;
+                    var ctx = c.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    var imgData = ctx.getImageData(0, 0, w, h);
+                    if (window.jsQR) {
+                        var code = jsQR(imgData.data, w, h);
+                        if (code && code.data && code.data.indexOf("000201") === 0) {
+                            hospitalRawQrPayload = code.data.trim();
+                            localStorage.setItem('bch_raw_qr_payload', hospitalRawQrPayload);
+                            break;
+                        }
+                    }
+                }
+            };
+            img.src = b64;
         }
 
         function toggleAuth(mode) {
@@ -732,48 +799,59 @@
             });
         }
 
-        // ==========================================================
-        // ส่วนสร้าง Dynamic PromptPay QR Code (ระบุยอดเงินอัตโนมัติ)
-        // ==========================================================
-        function generatePromptPayPayload(promptpayId, amount) {
-            var target = String(promptpayId).replace(/[^0-9]/g, '');
-            var aid = "0016A000000677010111";
-            var targetTag = "";
+        // =========================================================================
+        // ฟังก์ชันแทรกยอดเงิน (Tag 54) ลงในรหัส QR จริงของโรงพยาบาลโดยไม่เปลี่ยนเลขบัญชี
+        // =========================================================================
+        function injectAmountToHospitalQr(rawQr, amount) {
+            if (!rawQr || rawQr.indexOf("000201") !== 0) return null;
+            var i = 0, n = rawQr.length;
+            var tags = [];
+            while (i + 4 <= n) {
+                var tag = rawQr.substring(i, i + 2);
+                var len = parseInt(rawQr.substring(i + 2, i + 4), 10);
+                if (isNaN(len)) break;
+                if (tag === "63") break;
+                var val = rawQr.substring(i + 4, i + 4 + len);
+                tags.push({ tag: tag, val: val });
+                i += 4 + len;
+            }
 
-            if (target.length >= 15) {
-                targetTag = "03" + ("0" + target.length).slice(-2) + target;
-            } else if (target.length === 13) {
-                targetTag = "0213" + target;
-            } else {
-                if (target.charAt(0) === '0') {
-                    target = "0066" + target.substring(1);
+            var amtStr = parseFloat(amount).toFixed(2);
+            var newTags = [];
+            var amountInserted = false;
+
+            for (var k = 0; k < tags.length; k++) {
+                var t = tags[k].tag;
+                var v = tags[k].val;
+                if (t === "01") {
+                    newTags.push({ tag: "01", val: "12" }); // 12 = QR ระบุยอดเงิน
+                } else if (t === "54") {
+                    continue; // ข้ามยอดเงินเก่าถ้ามี
+                } else if (t === "53") {
+                    newTags.push({ tag: t, val: v });
+                    newTags.push({ tag: "54", val: amtStr });
+                    amountInserted = true;
+                } else {
+                    newTags.push({ tag: t, val: v });
                 }
-                targetTag = "0113" + target;
             }
 
-            var merchantInfo = aid + targetTag;
-            var tag29 = "29" + ("0" + merchantInfo.length).slice(-2) + merchantInfo;
-            var numAmount = parseFloat(amount);
-            var poi = (numAmount && numAmount > 0) ? "010212" : "010211";
-
-            var payload = [
-                "000201",
-                poi,
-                tag29,
-                "5802TH",
-                "5303764"
-            ];
-
-            if (numAmount && numAmount > 0) {
-                var amtStr = numAmount.toFixed(2);
-                payload.push("54" + ("0" + amtStr.length).slice(-2) + amtStr);
+            if (!amountInserted) {
+                newTags.push({ tag: "54", val: amtStr });
             }
 
-            var rawStr = payload.join("") + "6304";
+            var body = "";
+            for (var m = 0; m < newTags.length; m++) {
+                var lenStr = ("0" + newTags[m].val.length).slice(-2);
+                body += newTags[m].tag + lenStr + newTags[m].val;
+            }
+            body += "6304";
+
+            // คำนวณรหัสตรวจสอบ CRC16-CCITT (0xFFFF)
             var crc = 0xFFFF;
-            for (var i = 0; i < rawStr.length; i++) {
-                crc ^= (rawStr.charCodeAt(i) << 8);
-                for (var j = 0; j < 8; j++) {
+            for (var c = 0; c < body.length; c++) {
+                crc ^= (body.charCodeAt(c) << 8);
+                for (var b = 0; b < 8; b++) {
                     if ((crc & 0x8000) !== 0) {
                         crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
                     } else {
@@ -782,11 +860,11 @@
                 }
             }
             var crcHex = ("0000" + crc.toString(16).toUpperCase()).slice(-4);
-            return rawStr + crcHex;
+            return body + crcHex;
         }
 
-        // วาดการ์ด QR Code พร้อมยอดชำระลงบน Canvas เพื่อให้บันทึกลงมือถือได้ 100%
-        function renderPromptPayCanvas(canvasId, amount) {
+        // วาดการ์ด QR Code ของโรงพยาบาลพร้อมยอดชำระลงบน Canvas
+        function renderHospitalQrCanvas(canvasId, amount) {
             var canvas = document.getElementById(canvasId);
             if (!canvas) return;
             var ctx = canvas.getContext('2d');
@@ -799,74 +877,117 @@
 
             // แถบหัวสีน้ำเงิน Thai QR Payment
             ctx.fillStyle = "#113566";
-            ctx.fillRect(0, 0, w, 65);
+            ctx.fillRect(0, 0, w, 60);
 
             ctx.fillStyle = "#ffffff";
-            ctx.font = "bold 20px 'Anuphan', sans-serif";
+            ctx.font = "bold 19px 'Anuphan', sans-serif";
             ctx.textAlign = "center";
-            ctx.fillText("THAI QR PAYMENT", w / 2, 30);
+            ctx.fillText("THAI QR PAYMENT", w / 2, 28);
             ctx.font = "14px 'Anuphan', sans-serif";
-            ctx.fillText("BCH Food Ordering (พร้อมเพย์)", w / 2, 52);
+            ctx.fillText("BCH Food Ordering (แผนกโภชนาการ)", w / 2, 50);
 
-            // สร้าง QR Code ด้วย QRious
-            var payload = generatePromptPayPayload(PROMPTPAY_ID, amount);
-            var tempCanvas = document.createElement('canvas');
-            new QRious({
-                element: tempCanvas,
-                value: payload,
-                size: 240,
-                level: 'M'
-            });
-
-            // วาด QR ลงตรงกลาง
-            ctx.drawImage(tempCanvas, (w - 240) / 2, 80, 240, 240);
-
-            // กรอบรอบตัวการ์ด
+            // กรอบการ์ด
             ctx.strokeStyle = "#dee2e6";
             ctx.lineWidth = 4;
             ctx.strokeRect(2, 2, w - 4, h - 4);
 
             // ข้อความยอดชำระด้านล่าง
             ctx.fillStyle = "#2d3436";
-            ctx.font = "bold 16px 'Anuphan', sans-serif";
-            ctx.fillText("ยอดชำระสุทธิ (ระบุยอดเงินอัตโนมัติ)", w / 2, 345);
+            ctx.font = "bold 15px 'Anuphan', sans-serif";
+            ctx.fillText("ยอดชำระสุทธิ", w / 2, 360);
 
             ctx.fillStyle = "#d63031";
             ctx.font = "bold 28px 'Anuphan', sans-serif";
-            ctx.fillText(parseFloat(amount).toFixed(2) + " บาท", w / 2, 380);
+            ctx.fillText(parseFloat(amount).toFixed(2) + " บาท", w / 2, 395);
 
-            ctx.fillStyle = "#636e72";
-            ctx.font = "12px 'Anuphan', sans-serif";
-            ctx.fillText("PromptPay ID: " + PROMPTPAY_ID, w / 2, 405);
+            // กรณีถอดรหัสบัญชีจริงจากรูป QR โรงพยาบาลได้แล้ว -> สร้าง QR ระบุยอดเงินจากบัญชีจริงทันที
+            var dynamicPayload = injectAmountToHospitalQr(hospitalRawQrPayload, amount);
+            if (dynamicPayload && window.QRious) {
+                var tempCanvas = document.createElement('canvas');
+                new QRious({
+                    element: tempCanvas,
+                    value: dynamicPayload,
+                    size: 250,
+                    level: 'M'
+                });
+                ctx.drawImage(tempCanvas, (w - 250) / 2, 75, 250, 250);
+                return;
+            }
+
+            // กรณีสำรอง: วาดรูป QR ต้นฉบับของโรงพยาบาลลงในการ์ดโดยตรง
+            var drawOriginalImg = function(srcUrl) {
+                var img = new Image();
+                img.crossOrigin = "anonymous";
+                img.onload = function() {
+                    ctx.drawImage(img, (w - 240) / 2, 70, 240, 265);
+                    // ลองถอดรหัสด้วย jsQR อีกครั้งเมื่อโหลดรูปเสร็จ
+                    if (!hospitalRawQrPayload && window.jsQR) {
+                        try {
+                            var imgData = ctx.getImageData((w - 240) / 2, 70, 240, 265);
+                            var code = jsQR(imgData.data, 240, 265);
+                            if (code && code.data && code.data.indexOf("000201") === 0) {
+                                hospitalRawQrPayload = code.data.trim();
+                                localStorage.setItem('bch_raw_qr_payload', hospitalRawQrPayload);
+                                renderHospitalQrCanvas(canvasId, amount);
+                            }
+                        } catch (e) {}
+                    }
+                };
+                img.src = srcUrl;
+            };
+
+            if (hospitalQrBase64) {
+                drawOriginalImg(hospitalQrBase64);
+            } else {
+                callApi('getQrBase64', {}).then(function(res) {
+                    if (res && res.status && res.base64) {
+                        hospitalQrBase64 = res.base64;
+                        try { localStorage.setItem('bch_qr_b64', hospitalQrBase64); } catch(e) {}
+                        decodeQrFromBase64(hospitalQrBase64);
+                        setTimeout(function() { renderHospitalQrCanvas(canvasId, amount); }, 200);
+                    } else {
+                        drawOriginalImg(HOSPITAL_QR_URL);
+                    }
+                }).catch(function() {
+                    drawOriginalImg(HOSPITAL_QR_URL);
+                });
+            }
         }
 
-        // บันทึก QR ลงอัลบั้มรูปในมือถือ (รองรับทั้ง iOS และ Android)
-        async function saveQrToAlbum(amount) {
+        // บันทึกรูป QR ลงมือถือ และเมื่อบันทึกเสร็จให้เด้งหน้าต่างเลือกแอปธนาคารทันที
+        function saveQrAndShowBanks(amount) {
             var canvas = document.getElementById('qr-payment-canvas');
-            if (!canvas) return;
+            if (!canvas) {
+                showBankChooser();
+                return;
+            }
 
             var fileName = 'BCH-QR-' + parseFloat(amount).toFixed(0) + 'THB.png';
 
             canvas.toBlob(async function(blob) {
-                if (!blob) return;
+                if (!blob) {
+                    showBankChooser();
+                    return;
+                }
                 var file = new File([blob], fileName, { type: 'image/png' });
+                var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-                // กรณีมือถือรองรับ Web Share API (เช่น iPhone iOS Safari -> กด Save Image ลงอัลบั้มได้ทันที)
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                // บน iOS ใช้ Share Sheet เพื่อให้กด "บันทึกรูปภาพ (Save Image)" ลงอัลบั้มรูปได้โดยตรง
+                if (isIOS && navigator.canShare && navigator.canShare({ files: [file] })) {
                     try {
                         await navigator.share({
                             files: [file],
-                            title: 'QR ชำระค่าอาหาร BCH Food',
-                            text: 'ยอดชำระ ' + amount + ' บาท'
+                            title: 'QR ชำระค่าอาหาร BCH Food'
                         });
+                        // เมื่อกดบันทึกรูปเสร็จแล้ว ให้เด้งหน้าต่างเลือกแอปธนาคารขึ้นมาทันที!
+                        showBankChooser();
                         return;
                     } catch (err) {
-                        // หากผู้ใช้กดยกเลิก Share Sheet ไม่ต้องแจ้ง Error
                         if (err.name === 'AbortError') return;
                     }
                 }
 
-                // Fallback สำหรับ Android / PC Browser (ดาวน์โหลดไฟล์ PNG เข้าเครื่องทันที)
+                // บน Android หรือบราวเซอร์ทั่วไป ดาวน์โหลดรูปเข้าแกลเลอรีทันที แล้วเด้งเลือกแอปธนาคาร
                 var link = document.createElement('a');
                 link.download = fileName;
                 link.href = URL.createObjectURL(blob);
@@ -874,18 +995,48 @@
                 link.click();
                 document.body.removeChild(link);
 
-                Swal.showValidationMessage(''); // ล้างข้อความเตือนถ้ามี
-                var toastMixin = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500 });
-                toastMixin.fire({ icon: 'success', title: 'ดาวน์โหลดรูป QR เรียบร้อยแล้ว' });
+                showBankChooser();
             }, 'image/png');
         }
 
-        // เปิดแอปธนาคารผ่าน Deep Link
-        function openBankApp(schemeUrl, bankName) {
-            window.location.href = schemeUrl;
+        function showBankChooser() {
+            $('#bank-chooser-modal').removeClass('hidden');
         }
 
-        // ย่อรูปสลิปและแปลงเป็น Base64
+        function closeBankChooser() {
+            $('#bank-chooser-modal').addClass('hidden');
+        }
+
+        // เปิดแอปธนาคารในเครื่อง (แก้ปัญหา "ที่อยู่เว็บไม่ถูกต้อง" บน Android ด้วย Intent Package)
+        function openBankApp(bankKey) {
+            var isAndroid = /Android/i.test(navigator.userAgent);
+            var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+            var banks = {
+                'scb':   { ios: 'scbeasy://',          pkg: 'com.scb.phone',                        scheme: 'scbeasy' },
+                'kbank': { ios: 'kplus://',            pkg: 'com.kasikorn.retail.mbanking.wap',     scheme: 'kplus' },
+                'ktb':   { ios: 'krungthainext://',    pkg: 'ktbcs.netbank',                        scheme: 'krungthainext' },
+                'bbl':   { ios: 'bualuangmbanking://', pkg: 'com.bbl.mobilebanking',                scheme: 'bualuangmbanking' },
+                'kma':   { ios: 'kma://',              pkg: 'com.krungsri.kma',                     scheme: 'kma' },
+                'ttb':   { ios: 'ttbtouch://',         pkg: 'com.TMBTOUCH.PRODUCTION',              scheme: 'ttbtouch' },
+                'gsb':   { ios: 'gsbmymo://',          pkg: 'com.gsb.mymo',                         scheme: 'gsbmymo' }
+            };
+
+            var b = banks[bankKey];
+            if (!b) return;
+
+            // ปิดหน้าต่างเลือกธนาคาร เพื่อให้พอกลับมาจากแอปธนาคาร จะเจอปุ่มแนบสลิปทันที
+            closeBankChooser();
+
+            if (isAndroid) {
+                var fallback = encodeURIComponent(window.location.href);
+                var intentUrl = 'intent://#Intent;scheme=' + b.scheme + ';package=' + b.pkg + ';S.browser_fallback_url=' + fallback + ';end';
+                window.location.href = intentUrl;
+            } else if (isIOS) {
+                window.location.href = b.ios;
+            }
+        }
+
         function compressSlipFile(file) {
             return new Promise(function(resolve) {
                 var reader = new FileReader();
@@ -928,41 +1079,26 @@
         function showPaymentQr(total, note) {
             localStorage.setItem('bch_pending_order', JSON.stringify({ total: total, note: note, cart: cart, payment_method: 'โอนเงิน' }));
             var amount = parseFloat(total).toFixed(2);
-            
-            var qrDisplayHtml = USE_DYNAMIC_PROMPTPAY 
-                ? `<canvas id="qr-payment-canvas" width="340" height="420" style="width: 240px; height: auto; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);"></canvas>`
-                : `<img id="qr-image" src="https://lh3.googleusercontent.com/d/1OSPnc96ejBHV7Z6CFSNWc8t86INNwKDh" width="240" height="290" alt="PromptPay QR" class="rounded shadow-sm">`;
 
             var html = `
                 <div class="text-center">
-                    <div class="mb-2">${qrDisplayHtml}</div>
+                    <div class="mb-2">
+                        <canvas id="qr-payment-canvas" width="340" height="415" style="width: 245px; height: auto; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);"></canvas>
+                    </div>
                     
-                    <!-- ปุ่มบันทึก QR ลงอัลบั้มรูป (iOS & Android) -->
-                    <div class="d-grid gap-2 col-10 mx-auto mb-2">
-                        <button type="button" class="btn btn-primary rounded-pill btn-sm py-2 shadow-sm" id="btn-save-qr">
-                            <i class="fas fa-download me-1"></i> บันทึก QR ลงอัลบั้มรูป (iOS / Android)
+                    <!-- ปุ่มเดียว: กดบันทึกรูปภาพ แล้วเด้งเลือกแอปธนาคารอัตโนมัติ -->
+                    <div class="d-grid gap-2 col-11 mx-auto mb-2">
+                        <button type="button" class="btn btn-primary rounded-pill py-2 shadow-sm fw-bold" id="btn-save-qr">
+                            <i class="fas fa-download me-1"></i> บันทึกรูป QR Code (เพื่อไปแอปธนาคาร)
                         </button>
                     </div>
-                    <small class="text-muted d-block mb-2" style="font-size: 0.72rem;">
-                        *สำหรับ iPhone: กดปุ่มด้านบนแล้วเลือก <strong>"บันทึกรูปภาพ (Save Image)"</strong>
+                    <small class="text-muted d-block mb-3" style="font-size: 0.74rem;">
+                        *เมื่อกดบันทึกรูปเสร็จ ระบบจะเด้งให้เลือกแอปธนาคารอัตโนมัติครับ
                     </small>
-
-                    <!-- ปุ่มกดเปิดแอปธนาคารทันที -->
-                    <div class="bg-light p-2 rounded-3 mb-3 border">
-                        <div class="small fw-bold text-secondary mb-2"><i class="fas fa-mobile-alt me-1"></i> กดเพื่อเปิดแอปธนาคารของคุณ</div>
-                        <div class="row g-1">
-                            <div class="col-4"><a href="javascript:void(0)" onclick="openBankApp('kplus://', 'K PLUS')" class="bank-btn" style="background:#138f2d;">K PLUS</a></div>
-                            <div class="col-4"><a href="javascript:void(0)" onclick="openBankApp('scbeasy://', 'SCB EASY')" class="bank-btn" style="background:#4e2e7f;">SCB EASY</a></div>
-                            <div class="col-4"><a href="javascript:void(0)" onclick="openBankApp('ktbnext://', 'Krungthai')" class="bank-btn" style="background:#00a9e0;">กรุงไทย</a></div>
-                            <div class="col-4"><a href="javascript:void(0)" onclick="openBankApp('bualuangmbanking://', 'BBL')" class="bank-btn" style="background:#1e4598;">กรุงเทพ</a></div>
-                            <div class="col-4"><a href="javascript:void(0)" onclick="openBankApp('kma://', 'KMA')" class="bank-btn" style="background:#fdb813; color:#2d3436 !important;">กรุงศรี</a></div>
-                            <div class="col-4"><a href="javascript:void(0)" onclick="openBankApp('ttbtouch://', 'ttb')" class="bank-btn" style="background:#0050f0;">ttb touch</a></div>
-                        </div>
-                    </div>
 
                     <!-- ส่วนแนบสลิปและส่งออเดอร์อัตโนมัติ -->
                     <div class="text-start mt-2">
-                        <label class=" slip-dropzone w-100" for="slip-upload">
+                        <label class="slip-dropzone w-100" for="slip-upload">
                             <i class="fas fa-cloud-upload-alt fa-2x text-danger mb-1"></i>
                             <div class="fw-bold text-danger small">แตะที่นี่เพื่อแนบสลิปโอนเงิน</div>
                             <div class="text-muted" style="font-size: 0.72rem;">(เมื่อเลือกสลิปแล้ว ระบบจะส่งออเดอร์ให้อัตโนมัติทันที)</div>
@@ -980,14 +1116,13 @@
                 cancelButtonText: 'ย้อนกลับ',
                 allowOutsideClick: false,
                 didOpen: function() { 
-                    if (USE_DYNAMIC_PROMPTPAY) {
-                        renderPromptPayCanvas('qr-payment-canvas', amount);
-                    }
+                    renderHospitalQrCanvas('qr-payment-canvas', amount);
+
                     $('#btn-save-qr').on('click', function() { 
-                        saveQrToAlbum(amount); 
+                        saveQrAndShowBanks(amount); 
                     });
 
-                    // ทันทีที่ลูกค้าเลือกรูปสลิป ให้ประมวลผลและส่งออเดอร์อัตโนมัติทันที!
+                    // ทันทีที่ลูกค้าเลือกรูปสลิป ให้ส่งออเดอร์อัตโนมัติทันที
                     $('#slip-upload').on('change', function() {
                         if (this.files && this.files.length > 0) {
                             Swal.clickConfirm();
@@ -1004,6 +1139,7 @@
                     return compressSlipFile(file);
                 }
             }).then(function(result) {
+                closeBankChooser();
                 if (result.isConfirmed) {
                     var slipBase64 = result.value;
                     submitOrderToSheet(total, note, "โอนเงิน", slipBase64); 
