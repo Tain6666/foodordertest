@@ -24,13 +24,8 @@
         .nav-pills .nav-link.active { background-color: var(--primary-color); }
         .nav-pills .nav-link { color: var(--text-color); }
         .swal2-popup { font-family: 'Anuphan', sans-serif; border-radius: 20px; }
-        .bank-btn { font-size: 0.85rem; font-weight: 600; border-radius: 12px; padding: 10px 8px; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; color: white !important; box-shadow: 0 3px 6px rgba(0,0,0,0.12); transition: transform 0.15s; border: none; width: 100%; }
-        .bank-btn:active { transform: scale(0.96); }
         .slip-dropzone { border: 2px dashed #ff6b35; border-radius: 12px; background: #fff9f5; padding: 12px; text-align: center; cursor: pointer; transition: all 0.2s; }
         .slip-dropzone:hover { background: #fff0e6; }
-        .bank-modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.65); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; animation: fadeIn 0.2s ease; }
-        .bank-modal-card { background: white; border-radius: 20px; max-width: 380px; width: 100%; padding: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); text-align: center; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -44,27 +39,6 @@
         </div>
     </nav>
     <div id="cart-btn" class="cart-fab hidden" onclick="showCart()"><i class="fas fa-shopping-basket fa-lg"></i> <span id="cart-count">0</span> <small class="ms-1">รายการ</small></div>
-    
-    <!-- หน้าต่างเด้งเลือกแอปธนาคารหลังบันทึกรูปเสร็จ -->
-    <div id="bank-chooser-modal" class="bank-modal-backdrop hidden">
-        <div class="bank-modal-card">
-            <div class="text-success mb-1"><i class="fas fa-check-circle fa-2x"></i></div>
-            <h5 class="fw-bold mb-1">บันทึกรูป QR สำเร็จ!</h5>
-            <p class="text-muted small mb-3">กดเลือกแอปธนาคารในเครื่องเพื่อสแกนจ่ายได้เลยครับ</p>
-            <div class="row g-2 mb-3">
-                <div class="col-6"><button type="button" onclick="openBankApp('kbank')" class="bank-btn" style="background:#138f2d;">K PLUS (กสิกร)</button></div>
-                <div class="col-6"><button type="button" onclick="openBankApp('scb')" class="bank-btn" style="background:#4e2e7f;">SCB EASY (ไทยพาณิชย์)</button></div>
-                <div class="col-6"><button type="button" onclick="openBankApp('ktb')" class="bank-btn" style="background:#00a9e0;">Krungthai NEXT</button></div>
-                <div class="col-6"><button type="button" onclick="openBankApp('bbl')" class="bank-btn" style="background:#1e4598;">Bangkok Bank</button></div>
-                <div class="col-6"><button type="button" onclick="openBankApp('kma')" class="bank-btn" style="background:#fdb813; color:#2d3436 !important;">KMA (กรุงศรี)</button></div>
-                <div class="col-6"><button type="button" onclick="openBankApp('ttb')" class="bank-btn" style="background:#0050f0;">ttb touch</button></div>
-                <div class="col-12"><button type="button" onclick="openBankApp('gsb')" class="bank-btn" style="background:#eb198d;">MyMo (ออมสิน)</button></div>
-            </div>
-            <button type="button" class="btn btn-outline-secondary rounded-pill w-100 btn-sm" onclick="closeBankChooser()">
-                กลับไปหน้าแนบสลิปโอนเงิน
-            </button>
-        </div>
-    </div>
 
     <div class="container mt-4">
         <div id="auth-section">
@@ -824,9 +798,9 @@
                 var t = tags[k].tag;
                 var v = tags[k].val;
                 if (t === "01") {
-                    newTags.push({ tag: "01", val: "12" }); // 12 = QR ระบุยอดเงิน
+                    newTags.push({ tag: "01", val: "12" });
                 } else if (t === "54") {
-                    continue; // ข้ามยอดเงินเก่าถ้ามี
+                    continue;
                 } else if (t === "53") {
                     newTags.push({ tag: t, val: v });
                     newTags.push({ tag: "54", val: amtStr });
@@ -847,7 +821,6 @@
             }
             body += "6304";
 
-            // คำนวณรหัสตรวจสอบ CRC16-CCITT (0xFFFF)
             var crc = 0xFFFF;
             for (var c = 0; c < body.length; c++) {
                 crc ^= (body.charCodeAt(c) << 8);
@@ -871,11 +844,9 @@
             var w = canvas.width;
             var h = canvas.height;
 
-            // พื้นหลังสีขาว
             ctx.fillStyle = "#ffffff";
             ctx.fillRect(0, 0, w, h);
 
-            // แถบหัวสีน้ำเงิน Thai QR Payment
             ctx.fillStyle = "#113566";
             ctx.fillRect(0, 0, w, 60);
 
@@ -886,12 +857,10 @@
             ctx.font = "14px 'Anuphan', sans-serif";
             ctx.fillText("BCH Food Ordering (แผนกโภชนาการ)", w / 2, 50);
 
-            // กรอบการ์ด
             ctx.strokeStyle = "#dee2e6";
             ctx.lineWidth = 4;
             ctx.strokeRect(2, 2, w - 4, h - 4);
 
-            // ข้อความยอดชำระด้านล่าง
             ctx.fillStyle = "#2d3436";
             ctx.font = "bold 15px 'Anuphan', sans-serif";
             ctx.fillText("ยอดชำระสุทธิ", w / 2, 360);
@@ -900,7 +869,6 @@
             ctx.font = "bold 28px 'Anuphan', sans-serif";
             ctx.fillText(parseFloat(amount).toFixed(2) + " บาท", w / 2, 395);
 
-            // กรณีถอดรหัสบัญชีจริงจากรูป QR โรงพยาบาลได้แล้ว -> สร้าง QR ระบุยอดเงินจากบัญชีจริงทันที
             var dynamicPayload = injectAmountToHospitalQr(hospitalRawQrPayload, amount);
             if (dynamicPayload && window.QRious) {
                 var tempCanvas = document.createElement('canvas');
@@ -914,13 +882,11 @@
                 return;
             }
 
-            // กรณีสำรอง: วาดรูป QR ต้นฉบับของโรงพยาบาลลงในการ์ดโดยตรง
             var drawOriginalImg = function(srcUrl) {
                 var img = new Image();
                 img.crossOrigin = "anonymous";
                 img.onload = function() {
                     ctx.drawImage(img, (w - 240) / 2, 70, 240, 265);
-                    // ลองถอดรหัสด้วย jsQR อีกครั้งเมื่อโหลดรูปเสร็จ
                     if (!hospitalRawQrPayload && window.jsQR) {
                         try {
                             var imgData = ctx.getImageData((w - 240) / 2, 70, 240, 265);
@@ -954,21 +920,15 @@
             }
         }
 
-        // บันทึกรูป QR ลงมือถือ และเมื่อบันทึกเสร็จให้เด้งหน้าต่างเลือกแอปธนาคารทันที
-        function saveQrAndShowBanks(amount) {
+        // บันทึกรูป QR ลงอัลบั้มรูปในมือถือ (รองรับทั้ง iOS และ Android)
+        function saveQrToAlbum(amount) {
             var canvas = document.getElementById('qr-payment-canvas');
-            if (!canvas) {
-                showBankChooser();
-                return;
-            }
+            if (!canvas) return;
 
             var fileName = 'BCH-QR-' + parseFloat(amount).toFixed(0) + 'THB.png';
 
             canvas.toBlob(async function(blob) {
-                if (!blob) {
-                    showBankChooser();
-                    return;
-                }
+                if (!blob) return;
                 var file = new File([blob], fileName, { type: 'image/png' });
                 var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
@@ -979,15 +939,14 @@
                             files: [file],
                             title: 'QR ชำระค่าอาหาร BCH Food'
                         });
-                        // เมื่อกดบันทึกรูปเสร็จแล้ว ให้เด้งหน้าต่างเลือกแอปธนาคารขึ้นมาทันที!
-                        showBankChooser();
+                        $('#qr-save-status').removeClass('hidden');
                         return;
                     } catch (err) {
                         if (err.name === 'AbortError') return;
                     }
                 }
 
-                // บน Android หรือบราวเซอร์ทั่วไป ดาวน์โหลดรูปเข้าแกลเลอรีทันที แล้วเด้งเลือกแอปธนาคาร
+                // บน Android หรือบราวเซอร์ทั่วไป ดาวน์โหลดรูปเข้าแกลเลอรีทันที
                 var link = document.createElement('a');
                 link.download = fileName;
                 link.href = URL.createObjectURL(blob);
@@ -995,46 +954,8 @@
                 link.click();
                 document.body.removeChild(link);
 
-                showBankChooser();
+                $('#qr-save-status').removeClass('hidden');
             }, 'image/png');
-        }
-
-        function showBankChooser() {
-            $('#bank-chooser-modal').removeClass('hidden');
-        }
-
-        function closeBankChooser() {
-            $('#bank-chooser-modal').addClass('hidden');
-        }
-
-        // เปิดแอปธนาคารในเครื่อง (แก้ปัญหา "ที่อยู่เว็บไม่ถูกต้อง" บน Android ด้วย Intent Package)
-        function openBankApp(bankKey) {
-            var isAndroid = /Android/i.test(navigator.userAgent);
-            var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-            var banks = {
-                'scb':   { ios: 'scbeasy://',          pkg: 'com.scb.phone',                        scheme: 'scbeasy' },
-                'kbank': { ios: 'kplus://',            pkg: 'com.kasikorn.retail.mbanking.wap',     scheme: 'kplus' },
-                'ktb':   { ios: 'krungthainext://',    pkg: 'ktbcs.netbank',                        scheme: 'krungthainext' },
-                'bbl':   { ios: 'bualuangmbanking://', pkg: 'com.bbl.mobilebanking',                scheme: 'bualuangmbanking' },
-                'kma':   { ios: 'kma://',              pkg: 'com.krungsri.kma',                     scheme: 'kma' },
-                'ttb':   { ios: 'ttbtouch://',         pkg: 'com.TMBTOUCH.PRODUCTION',              scheme: 'ttbtouch' },
-                'gsb':   { ios: 'gsbmymo://',          pkg: 'com.gsb.mymo',                         scheme: 'gsbmymo' }
-            };
-
-            var b = banks[bankKey];
-            if (!b) return;
-
-            // ปิดหน้าต่างเลือกธนาคาร เพื่อให้พอกลับมาจากแอปธนาคาร จะเจอปุ่มแนบสลิปทันที
-            closeBankChooser();
-
-            if (isAndroid) {
-                var fallback = encodeURIComponent(window.location.href);
-                var intentUrl = 'intent://#Intent;scheme=' + b.scheme + ';package=' + b.pkg + ';S.browser_fallback_url=' + fallback + ';end';
-                window.location.href = intentUrl;
-            } else if (isIOS) {
-                window.location.href = b.ios;
-            }
         }
 
         function compressSlipFile(file) {
@@ -1086,14 +1007,21 @@
                         <canvas id="qr-payment-canvas" width="340" height="415" style="width: 245px; height: auto; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);"></canvas>
                     </div>
                     
-                    <!-- ปุ่มเดียว: กดบันทึกรูปภาพ แล้วเด้งเลือกแอปธนาคารอัตโนมัติ -->
+                    <!-- ปุ่มบันทึกรูปภาพลงอัลบั้มมือถือ -->
                     <div class="d-grid gap-2 col-11 mx-auto mb-2">
                         <button type="button" class="btn btn-primary rounded-pill py-2 shadow-sm fw-bold" id="btn-save-qr">
-                            <i class="fas fa-download me-1"></i> บันทึกรูป QR Code (เพื่อไปแอปธนาคาร)
+                            <i class="fas fa-download me-1"></i> บันทึกรูป QR Code ลงอัลบั้มรูป
                         </button>
                     </div>
-                    <small class="text-muted d-block mb-3" style="font-size: 0.74rem;">
-                        *เมื่อกดบันทึกรูปเสร็จ ระบบจะเด้งให้เลือกแอปธนาคารอัตโนมัติครับ
+
+                    <!-- แถบแจ้งเตือนเมื่อกดบันทึกรูปสำเร็จ -->
+                    <div id="qr-save-status" class="alert alert-success py-2 px-3 mx-auto mb-2 hidden" style="font-size: 0.8rem; border-radius: 12px;">
+                        <i class="fas fa-check-circle me-1"></i> <strong>บันทึกรูป QR ลงอัลบั้มแล้ว!</strong><br>
+                        กรุณาเปิดแอปธนาคารของคุณเพื่อสแกนจ่าย แล้วกลับมาแนบสลิปด้านล่างครับ
+                    </div>
+
+                    <small class="text-muted d-block mb-3" style="font-size: 0.73rem;">
+                        *สำหรับ iPhone: กดปุ่มด้านบนแล้วเลือก <strong>"บันทึกรูปภาพ (Save Image)"</strong>
                     </small>
 
                     <!-- ส่วนแนบสลิปและส่งออเดอร์อัตโนมัติ -->
@@ -1119,7 +1047,7 @@
                     renderHospitalQrCanvas('qr-payment-canvas', amount);
 
                     $('#btn-save-qr').on('click', function() { 
-                        saveQrAndShowBanks(amount); 
+                        saveQrToAlbum(amount); 
                     });
 
                     // ทันทีที่ลูกค้าเลือกรูปสลิป ให้ส่งออเดอร์อัตโนมัติทันที
@@ -1139,7 +1067,6 @@
                     return compressSlipFile(file);
                 }
             }).then(function(result) {
-                closeBankChooser();
                 if (result.isConfirmed) {
                     var slipBase64 = result.value;
                     submitOrderToSheet(total, note, "โอนเงิน", slipBase64); 
