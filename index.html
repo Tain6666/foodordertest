@@ -118,6 +118,7 @@
         var menuTodayList = []; 
         var cart = [];
         var currentCartNote = "";
+        var isSubmittingOrder = false;
 
         // รูป QR จริงของโรงพยาบาล และตัวแปรเก็บข้อมูลรหัส QR ที่ถอดรหัสได้
         var HOSPITAL_QR_URL = "https://lh3.googleusercontent.com/d/1OSPnc96ejBHV7Z6CFSNWc8t86INNwKDh";
@@ -569,6 +570,7 @@
         
         function showCart() { if(cart.length === 0) return; renderCartModal(); }
 
+        // --- 1. หน้าตะกร้าของฉัน (ตัดช่องรายละเอียดเพิ่มเติมออก เพื่อย้ายไปหน้าถัดไป) ---
         function renderCartModal() {
             var total = 0, totalKcal = 0, totalPro = 0, totalNa = 0; 
             var html = '<ul class="list-group mb-3 text-start">';
@@ -596,28 +598,19 @@
             
             if(totalKcal > 0) {
                 html += `
-                    <div class="alert alert-light border border-warning py-2 px-3 mb-3 text-center" style="font-size: 0.85rem;">
+                    <div class="alert alert-light border border-warning py-2 px-3 mb-2 text-center" style="font-size: 0.85rem;">
                         <span class="fw-bold d-block mb-1">📊 ข้อมูลโภชนาการโดยประมาณ</span>
                         พลังงาน: <strong>${totalKcal}</strong> kcal | โปรตีน: <strong>${totalPro}</strong> g | โซเดียม: <strong>${totalNa}</strong> mg
                     </div>
                 `;
             }
-
-            html += '<div class="text-start mb-2"><label class="form-label small fw-bold text-muted"><i class="fas fa-pen"></i> รายละเอียดเพิ่มเติม (ถ้ามี)</label><textarea id="cart-note" class="form-control" rows="2" placeholder="เช่น ไม่ใส่ผัก, ขอช้อนส้อม, เผ็ดน้อย">' + currentCartNote + '</textarea></div>';
             
             Swal.fire({ 
                 title: '🛒 ตะกร้าของฉัน', html: html, showCancelButton: true, showCloseButton: true, 
-                confirmButtonText: 'ดำเนินการต่อ', confirmButtonColor: '#27ae60', cancelButtonText: 'เลือกต่อ', width: 600, 
-                preConfirm: function() { 
-                    currentCartNote = $('#cart-note').val();
-                    return currentCartNote; 
-                } 
+                confirmButtonText: 'ดำเนินการต่อ', confirmButtonColor: '#27ae60', cancelButtonText: 'เลือกต่อ', width: 600
             }).then(function(result) { 
                 if(result.isConfirmed) { 
-                    var note = result.value; 
-                    showCheckoutOptions(total, note); 
-                } else {
-                    currentCartNote = $('#cart-note').val();
+                    showCheckoutOptions(total); 
                 }
             });
         }
@@ -631,7 +624,8 @@
             } else { renderCartModal(); }
         }
 
-        function showCheckoutOptions(total, cartNote) {
+        // --- 2. หน้ารายละเอียดการสั่งซื้อ (แทนที่ 2.วิธีการชำระเงิน ด้วย รายละเอียดเพิ่มเติม) ---
+        function showCheckoutOptions(total) {
             var ecoOpts = currentCheckoutState.ecoOptions || [];
             var chkCutlery = ecoOpts.includes("ไม่รับช้อนส้อม") ? "checked" : "";
             var chkCondiment = ecoOpts.includes("ไม่รับเครื่องปรุง") ? "checked" : "";
@@ -687,10 +681,9 @@
                         <small class="text-danger fw-bold" style="font-size: 0.8rem;">*เวลาที่ส่งอาจล่าช้าหากมี Order จำนวนมาก</small>
                     </div>
                     <hr>
-                    <h6 class="fw-bold mb-2">2. วิธีการชำระเงิน</h6>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="radio" name="paymentMethod" id="pay-transfer" value="โอนเงิน" checked>
-                        <label class="form-check-label" for="pay-transfer">โอนเงิน (สแกน QR Code พร้อมแนบสลิป)</label>
+                    <h6 class="fw-bold mb-2">2. รายละเอียดเพิ่มเติม (ถ้ามี)</h6>
+                    <div class="mb-2">
+                        <textarea id="cart-note" class="form-control form-control-sm" rows="2" placeholder="เช่น ไม่ใส่ผัก, ขอช้อนส้อม, เผ็ดน้อย">${currentCartNote}</textarea>
                     </div>
                 </div>
             `;
@@ -704,7 +697,8 @@
                 cancelButtonText: 'ย้อนกลับ',
                 preConfirm: function() {
                     var deliveryMethod = $('input[name="deliveryMethod"]:checked').val();
-                    var finalNote = cartNote; 
+                    currentCartNote = ($('#cart-note').val() || "").trim();
+                    var finalNote = currentCartNote; 
 
                     var ecoOptions = [];
                     $('.eco-check:checked').each(function() {
@@ -742,6 +736,7 @@
                     var finalData = result.value;
                     showPaymentQr(total, finalData.note);
                 } else if (result.dismiss === Swal.DismissReason.cancel) {
+                    currentCartNote = ($('#cart-note').val() || "").trim();
                     renderCartModal();
                 }
             });
@@ -1069,15 +1064,13 @@
             }).then(function(result) {
                 if (result.isConfirmed) {
                     var slipBase64 = result.value;
-                    submitOrderToSheet(total, note, "โอนเงิน", slipBase64); 
+                    submitOrderToSheet(total, note, "โอนเงิน", slipBase64, 0); 
                 } else {
                     localStorage.removeItem('bch_pending_order');
-                    showCheckoutOptions(total, currentCartNote);
+                    showCheckoutOptions(total);
                 }
             });
         }
-
-        var isSubmittingOrder = false;
 
         function submitOrderToSheet(total, note, status, slipBase64, retryCount) {
             retryCount = retryCount || 0;
@@ -1100,8 +1093,8 @@
                 if(res.status) {
                     isSubmittingOrder = false;
                     clearCartOnSuccess(res.orderId);
-                } else {
-                    // หากเจอ Server Busy ให้ระบบลองส่งซ้ำอัตโนมัติสูงสุด 2 ครั้ง (ห่างกัน 2 วินาที)
+                } else { 
+                    // หากเจอ Server Busy ให้ลองส่งซ้ำอัตโนมัติสูงสุด 2 ครั้ง
                     if (res.msg && res.msg.indexOf('Busy') !== -1 && retryCount < 2) {
                         setTimeout(function() {
                             submitOrderToSheet(total, note, status, slipBase64, retryCount + 1);
