@@ -192,24 +192,37 @@
             var name = $('#reg-name').val(); var phone = $('#reg-phone').val();
             if(!name || !phone) return Swal.fire({title: 'ข้อมูลไม่ครบ', text: 'กรุณากรอกข้อมูลให้ครบถ้วน', icon: 'warning', showCloseButton: true});
             if(phone.length !== 10) return Swal.fire({title: 'รูปแบบไม่ถูกต้อง', text: 'กรุณากรอกเบอร์โทรศัพท์ให้ครบ 10 หลัก', icon: 'warning', showCloseButton: true});
-            Swal.showLoading();
+            Swal.fire({ title: 'กำลังลงทะเบียน...', allowOutsideClick: false, didOpen: function(){ Swal.showLoading(); } });
             callApi('registerUser', {name: name, phone: phone}).then(function(res){
                 Swal.close();
-                if(res.status) { Swal.fire({icon: 'success', title: 'ลงทะเบียนสำเร็จ', timer: 1500, showConfirmButton: false}); loginSuccess(res.name, res.phone); } 
-                else { Swal.fire({title: 'เกิดข้อผิดพลาด', text: res.msg, icon: 'error'}); }
-            }).catch(err => Swal.fire('Error', 'Connection Failed', 'error'));
+                if(res && res.status) {
+                    Swal.fire({icon: 'success', title: 'ลงทะเบียนสำเร็จ', timer: 1500, showConfirmButton: false});
+                    loginSuccess(res.name, res.phone);
+                } else {
+                    Swal.fire({title: 'เกิดข้อผิดพลาด', text: (res && res.msg) ? res.msg : 'ไม่สามารถลงทะเบียนได้', icon: 'error'});
+                }
+            }).catch(function(err){
+                console.error('Register Error:', err);
+                Swal.fire('Error', 'Connection Failed', 'error');
+            });
         }
 
         function doLogin() {
             var phone = $('#login-phone').val();
             if(!phone) return Swal.fire({title: 'ข้อมูลไม่ครบ', text: 'กรุณากรอกเบอร์โทรศัพท์', icon: 'warning'});
             if(phone.length !== 10) return Swal.fire({title: 'รูปแบบไม่ถูกต้อง', text: 'กรุณากรอกเบอร์โทรศัพท์ให้ครบ 10 หลัก', icon: 'warning'});
-            Swal.showLoading();
+            Swal.fire({ title: 'กำลังเข้าสู่ระบบ...', allowOutsideClick: false, didOpen: function(){ Swal.showLoading(); } });
             callApi('loginUser', {phone: phone}).then(function(res){
                 Swal.close();
-                if(res.status) { loginSuccess(res.name, res.phone); } 
-                else { Swal.fire({title: 'ไม่พบผู้ใช้', text: res.msg, icon: 'error'}); }
-            }).catch(err => Swal.fire('Error', 'Connection Failed', 'error'));
+                if(res && res.status) {
+                    loginSuccess(res.name, res.phone);
+                } else {
+                    Swal.fire({title: 'ไม่พบผู้ใช้', text: (res && res.msg) ? res.msg : 'ไม่สามารถเข้าสู่ระบบได้', icon: 'error'});
+                }
+            }).catch(function(err){
+                console.error('Login Error:', err);
+                Swal.fire('Error', 'Connection Failed', 'error');
+            });
         }
 
         function loginSuccess(name, phone) {
@@ -221,8 +234,13 @@
         function logout() {
             Swal.fire({title: 'ออกจากระบบ?', icon: 'question', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'ใช่', cancelButtonText: 'ยกเลิก'}).then(function(result) {
                 if (result.isConfirmed) {
-                    localStorage.removeItem('bch_user'); localStorage.removeItem('bch_pending_order'); 
+                    localStorage.removeItem('bch_user');
+                    localStorage.removeItem('bch_pending_order');
+                    localStorage.removeItem('bch_menu_data');
+                    localStorage.removeItem('bch_menu_today');
                     currentUser = null; cart = []; currentCartNote = ""; 
+                    menuData = { menu1: [], menu2: [] };
+                    menuTodayList = [];
                     currentCheckoutState = { ecoOptions: [], deliveryMethod: 'รับเอง', pickupTime: '', deliveryLocation: '', deliveryTime: '', paymentMethod: 'โอนเงิน' };
                     
                     $('#auth-section').removeClass('hidden'); $('#app-section').addClass('hidden'); $('#nav-logout-btn').addClass('hidden'); $('#cart-btn').addClass('hidden');
@@ -235,30 +253,62 @@
             $('#auth-section').addClass('hidden'); $('#app-section').removeClass('hidden'); $('#nav-logout-btn').removeClass('hidden');
             $('#user-display-name').text(currentUser.name);
             
-            var cachedMenu = localStorage.getItem('bch_menu_data');
-            if (cachedMenu) { menuData = JSON.parse(cachedMenu); }
-
-            var cachedMenuToday = localStorage.getItem('bch_menu_today');
-            if (cachedMenuToday) { menuTodayList = JSON.parse(cachedMenuToday); }
-            
-            callApi('getMenuData', {}).then(function(data){
-                menuData = data;
-                localStorage.setItem('bch_menu_data', JSON.stringify(menuData));
-            });
-            callApi('getMenuToday', {}).then(function(data){
-                menuTodayList = data.items;
-                localStorage.setItem('bch_menu_today', JSON.stringify(menuTodayList));
-            });
-
-            var pendingOrder = localStorage.getItem('bch_pending_order');
-            if (pendingOrder) { 
-                var order = JSON.parse(pendingOrder); 
-                cart = order.cart; updateCartBadge(); 
-                if(order.payment_method === 'โอนเงิน') {
-                    showPaymentQr(order.total, order.note); 
+            // อ่าน Cache เมนูอย่างปลอดภัย (หากข้อมูลเสียหายหรือเป็น "undefined" ให้ลบทิ้งอัตโนมัติ)
+            try {
+                var cachedMenu = localStorage.getItem('bch_menu_data');
+                if (cachedMenu && cachedMenu !== 'undefined') {
+                    var parsedMenu = JSON.parse(cachedMenu);
+                    if (parsedMenu && Array.isArray(parsedMenu.menu1) && Array.isArray(parsedMenu.menu2)) {
+                        menuData = parsedMenu;
+                    }
                 }
-            } 
-            else { updateCartBadge(); }
+            } catch (e) {
+                localStorage.removeItem('bch_menu_data');
+            }
+
+            try {
+                var cachedMenuToday = localStorage.getItem('bch_menu_today');
+                if (cachedMenuToday && cachedMenuToday !== 'undefined') {
+                    var parsedToday = JSON.parse(cachedMenuToday);
+                    if (Array.isArray(parsedToday)) {
+                        menuTodayList = parsedToday;
+                    }
+                }
+            } catch (e) {
+                localStorage.removeItem('bch_menu_today');
+            }
+            
+            // ดึงเมนูล่าสุด และบันทึก Cache เฉพาะเมื่อโครงสร้างข้อมูลถูกต้องเท่านั้น
+            callApi('getMenuData', {}).then(function(data){
+                if (data && Array.isArray(data.menu1) && Array.isArray(data.menu2)) {
+                    menuData = data;
+                    localStorage.setItem('bch_menu_data', JSON.stringify(menuData));
+                }
+            }).catch(function(){});
+
+            callApi('getMenuToday', {}).then(function(data){
+                if (data && data.status && Array.isArray(data.items)) {
+                    menuTodayList = data.items;
+                    localStorage.setItem('bch_menu_today', JSON.stringify(menuTodayList));
+                }
+            }).catch(function(){});
+
+            try {
+                var pendingOrder = localStorage.getItem('bch_pending_order');
+                if (pendingOrder && pendingOrder !== 'undefined') { 
+                    var order = JSON.parse(pendingOrder); 
+                    if (order && Array.isArray(order.cart)) {
+                        cart = order.cart; updateCartBadge(); 
+                        if(order.payment_method === 'โอนเงิน') {
+                            showPaymentQr(order.total, order.note); 
+                        }
+                        return;
+                    }
+                }
+            } catch (e) {
+                localStorage.removeItem('bch_pending_order');
+            }
+            updateCartBadge();
         }
 
         function checkLatestOrder() {
