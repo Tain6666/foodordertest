@@ -836,8 +836,22 @@ var popupHtml = '<div class="text-start px-3"><div class="mb-2"><label class="fw
             return body + crcHex;
         }
 
-        // วาดการ์ด QR Code ของโรงพยาบาลพร้อมยอดชำระลงบน Canvas
-        function renderHospitalQrCanvas(canvasId, amount) {
+        // ฟังก์ชันช่วยแปลง Canvas เป็นรูป <img> เพื่อให้กดค้าง (Long-Press) บันทึกรูปได้
+        function syncQrCanvasToImg(canvasId, imgId) {
+            var canvas = document.getElementById(canvasId);
+            var imgEl = document.getElementById(imgId);
+            if (!canvas || !imgEl) return;
+            try {
+                // แปลงเป็น JPEG เพื่อให้อัลบั้มรูป Android และแอปธนาคารมองเห็นได้ทันที
+                imgEl.src = canvas.toDataURL('image/jpeg', 0.95);
+            } catch (e) {
+                // กรณีติด CORS Fallback ไปใช้ลิงก์รูปต้นฉบับ
+                imgEl.src = HOSPITAL_QR_URL;
+            }
+        }
+
+        // วาดการ์ด QR Code ของโรงพยาบาลลง Canvas (ซ่อนไว้) แล้วส่งไปแสดงในแท็ก <img>
+        function renderHospitalQrCanvas(canvasId, imgId, amount) {
             var canvas = document.getElementById(canvasId);
             if (!canvas) return;
             var ctx = canvas.getContext('2d');
@@ -879,6 +893,7 @@ var popupHtml = '<div class="text-start px-3"><div class="mb-2"><label class="fw
                     level: 'M'
                 });
                 ctx.drawImage(tempCanvas, (w - 250) / 2, 75, 250, 250);
+                syncQrCanvasToImg(canvasId, imgId);
                 return;
             }
 
@@ -894,10 +909,16 @@ var popupHtml = '<div class="text-start px-3"><div class="mb-2"><label class="fw
                             if (code && code.data && code.data.indexOf("000201") === 0) {
                                 hospitalRawQrPayload = code.data.trim();
                                 localStorage.setItem('bch_raw_qr_payload', hospitalRawQrPayload);
-                                renderHospitalQrCanvas(canvasId, amount);
+                                renderHospitalQrCanvas(canvasId, imgId, amount);
+                                return;
                             }
                         } catch (e) {}
                     }
+                    syncQrCanvasToImg(canvasId, imgId);
+                };
+                img.onerror = function() {
+                    var imgEl = document.getElementById(imgId);
+                    if (imgEl) imgEl.src = HOSPITAL_QR_URL;
                 };
                 img.src = srcUrl;
             };
@@ -910,7 +931,7 @@ var popupHtml = '<div class="text-start px-3"><div class="mb-2"><label class="fw
                         hospitalQrBase64 = res.base64;
                         try { localStorage.setItem('bch_qr_b64', hospitalQrBase64); } catch(e) {}
                         decodeQrFromBase64(hospitalQrBase64);
-                        setTimeout(function() { renderHospitalQrCanvas(canvasId, amount); }, 200);
+                        setTimeout(function() { renderHospitalQrCanvas(canvasId, imgId, amount); }, 200);
                     } else {
                         drawOriginalImg(HOSPITAL_QR_URL);
                     }
@@ -920,20 +941,20 @@ var popupHtml = '<div class="text-start px-3"><div class="mb-2"><label class="fw
             }
         }
 
-        // บันทึกรูป QR ลงอัลบั้มรูปในมือถือ (รองรับทั้ง iOS และ Android)
-        function saveQrToAlbum(amount) {
+        // บันทึกรูป QR เป็นไฟล์ .jpg (รองรับ iOS Save Image และ Android Gallery/Download)
+        function saveQrToAlbum(amount, forceShare) {
             var canvas = document.getElementById('qr-payment-canvas');
             if (!canvas) return;
 
-            var fileName = 'BCH-QR-' + parseFloat(amount).toFixed(0) + 'THB.png';
+            var fileName = 'BCH_QR_' + parseFloat(amount).toFixed(0) + 'THB.jpg';
 
             canvas.toBlob(async function(blob) {
                 if (!blob) return;
-                var file = new File([blob], fileName, { type: 'image/png' });
+                var file = new File([blob], fileName, { type: 'image/jpeg' });
                 var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-                // บน iOS ใช้ Share Sheet เพื่อให้กด "บันทึกรูปภาพ (Save Image)" ลงอัลบั้มรูปได้โดยตรง
-                if (isIOS && navigator.canShare && navigator.canShare({ files: [file] })) {
+                // iOS หรือเมื่อกดปุ่ม "แชร์ไปอัลบั้มรูป/แอปอื่น" บน Android
+                if ((isIOS || forceShare) && navigator.canShare && navigator.canShare({ files: [file] })) {
                     try {
                         await navigator.share({
                             files: [file],
@@ -946,16 +967,18 @@ var popupHtml = '<div class="text-start px-3"><div class="mb-2"><label class="fw
                     }
                 }
 
-                // บน Android หรือบราวเซอร์ทั่วไป ดาวน์โหลดรูปเข้าแกลเลอรีทันที
+                // Android / PC: ดาวน์โหลดเป็นไฟล์ .jpg เข้าโฟลเดอร์ Download (ขึ้นในอัลบั้ม "ดาวน์โหลด" ของคลังภาพ)
+                var url = URL.createObjectURL(blob);
                 var link = document.createElement('a');
                 link.download = fileName;
-                link.href = URL.createObjectURL(blob);
+                link.href = url;
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
+                setTimeout(function() { URL.revokeObjectURL(url); }, 3000);
 
                 $('#qr-save-status').removeClass('hidden');
-            }, 'image/png');
+            }, 'image/jpeg', 0.95);
         }
 
         function compressSlipFile(file) {
@@ -1000,28 +1023,43 @@ var popupHtml = '<div class="text-start px-3"><div class="mb-2"><label class="fw
         function showPaymentQr(total, note) {
             localStorage.setItem('bch_pending_order', JSON.stringify({ total: total, note: note, cart: cart, payment_method: 'โอนเงิน' }));
             var amount = parseFloat(total).toFixed(2);
+            var isAndroid = /Android/i.test(navigator.userAgent);
+
+            var androidShareBtn = isAndroid
+                ? `<button type="button" class="btn btn-outline-secondary rounded-pill btn-sm py-1" id="btn-share-qr">
+                       <i class="fas fa-share-alt me-1"></i> แชร์ไป Google Photos / แอปอื่น
+                   </button>`
+                : '';
 
             var html = `
                 <div class="text-center">
-                    <div class="mb-2">
-                        <canvas id="qr-payment-canvas" width="340" height="415" style="width: 245px; height: auto; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);"></canvas>
+                    <div class="mb-1">
+                        <!-- ซ่อน Canvas ไว้ใช้สร้างรูป และแสดงเป็นแท็ก <img> จริงเพื่อให้กดค้างบันทึกได้ -->
+                        <canvas id="qr-payment-canvas" width="340" height="415" class="hidden"></canvas>
+                        <img id="qr-payment-img" src="" alt="QR Payment"
+                             style="width: 245px; height: auto; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); -webkit-touch-callout: default !important; user-select: auto !important; -webkit-user-select: auto !important;">
                     </div>
+                    <small class="text-primary d-block mb-2 fw-semibold" style="font-size: 0.75rem;">
+                        <i class="fas fa-hand-pointer me-1"></i> แตะค้างที่รูป QR Code เพื่อบันทึก หรือกดปุ่มด้านล่าง
+                    </small>
                     
-                    <!-- ปุ่มบันทึกรูปภาพลงอัลบั้มมือถือ -->
+                    <!-- ปุ่มบันทึกรูปภาพ -->
                     <div class="d-grid gap-2 col-11 mx-auto mb-2">
                         <button type="button" class="btn btn-primary rounded-pill py-2 shadow-sm fw-bold" id="btn-save-qr">
-                            <i class="fas fa-download me-1"></i> บันทึกรูป QR Code ลงอัลบั้มรูป
+                            <i class="fas fa-download me-1"></i> บันทึกรูป QR Code
                         </button>
+                        ${androidShareBtn}
                     </div>
 
                     <!-- แถบแจ้งเตือนเมื่อกดบันทึกรูปสำเร็จ -->
-                    <div id="qr-save-status" class="alert alert-success py-2 px-3 mx-auto mb-2 hidden" style="font-size: 0.8rem; border-radius: 12px;">
-                        <i class="fas fa-check-circle me-1"></i> <strong>บันทึกรูป QR ลงอัลบั้มแล้ว!</strong><br>
-                        กรุณาเปิดแอปธนาคารของคุณเพื่อสแกนจ่าย แล้วกลับมาแนบสลิปด้านล่างครับ
+                    <div id="qr-save-status" class="alert alert-success py-2 px-3 mx-auto mb-2 hidden" style="font-size: 0.78rem; border-radius: 12px;">
+                        <i class="fas fa-check-circle me-1"></i> <strong>บันทึกรูป QR เรียบร้อยแล้ว!</strong><br>
+                        เปิดแอปธนาคารแล้วเลือกรูปจากอัลบั้ม <strong>"ดาวน์โหลด (Download)"</strong> หรือ <strong>"รูปภาพล่าสุด"</strong> ได้เลยครับ
                     </div>
 
-                    <small class="text-muted d-block mb-3" style="font-size: 0.73rem;">
-                        *สำหรับ iPhone: กดปุ่มด้านบนแล้วเลือก <strong>"บันทึกรูปภาพ (Save Image)"</strong>
+                    <small class="text-muted d-block mb-3" style="font-size: 0.72rem;">
+                        *iPhone: กดปุ่มบันทึกแล้วเลือก <strong>"บันทึกรูปภาพ (Save Image)"</strong><br>
+                        *Android: รูปจะอยู่ในอัลบั้ม <strong>"ดาวน์โหลด (Download)"</strong> ในคลังภาพ
                     </small>
 
                     <!-- ส่วนแนบสลิปและส่งออเดอร์อัตโนมัติ -->
@@ -1044,13 +1082,16 @@ var popupHtml = '<div class="text-start px-3"><div class="mb-2"><label class="fw
                 cancelButtonText: 'ย้อนกลับ',
                 allowOutsideClick: false,
                 didOpen: function() { 
-                    renderHospitalQrCanvas('qr-payment-canvas', amount);
+                    renderHospitalQrCanvas('qr-payment-canvas', 'qr-payment-img', amount);
 
                     $('#btn-save-qr').on('click', function() { 
-                        saveQrToAlbum(amount); 
+                        saveQrToAlbum(amount, false); 
                     });
 
-                    // ทันทีที่ลูกค้าเลือกรูปสลิป ให้ส่งออเดอร์อัตโนมัติทันที
+                    $('#btn-share-qr').on('click', function() { 
+                        saveQrToAlbum(amount, true); 
+                    });
+
                     $('#slip-upload').on('change', function() {
                         if (this.files && this.files.length > 0) {
                             Swal.clickConfirm();
